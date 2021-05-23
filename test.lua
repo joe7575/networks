@@ -71,7 +71,7 @@ local Cable = tubelib2.Tube:new({
 	tube_type = "ele",
 	primary_node_names = {"networks:cableS", "networks:cableA"}, 
 	secondary_node_names = {
-		"networks:generator", "networks:consumer", 
+		"networks:generator", "networks:consumer", "networks:consumer_on", 
 		"networks:junction", "networks:storage"},
 	after_place_tube = function(pos, param2, tube_type, num_tubes, tbl)
 		minetest.swap_node(pos, {name = "networks:cable"..tube_type, param2 = param2})
@@ -157,7 +157,7 @@ local Boxes = {
 
 networks.register_junction("networks:junction", size, Boxes, Cable, {
 	description = "Junction",
-	tiles = {"networks_cable.png"},
+	tiles = {"networks_junction.png"},
 	after_place_node = function(pos, placer, itemstack, pointed_thing)
 		local name = "networks:junction"..networks.junction_type(pos, Cable)
 		minetest.swap_node(pos, {name = name, param2 = 0})

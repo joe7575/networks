@@ -239,7 +239,7 @@ local function connection_walk(pos, outdirs, indir, node, tlib2, clbk)
 		for _,outdir in pairs(outdirs or get_node_connection_dirs(pos, tlib2.tube_type)) do
 			local pos2, indir2 = tlib2:get_connected_node_pos(pos, outdir)
 			local node = N(pos2)
-			if pos2 and not pos_already_reached(pos2) and valid_indir(pos2, indir2, node, tlib2.tube_type) then
+			if not pos_already_reached(pos2) and valid_indir(pos2, indir2, node, tlib2.tube_type) then
 				connection_walk(pos2, nil, indir2, node, tlib2, clbk)
 			end
 		end
@@ -252,10 +252,10 @@ local function collect_network_nodes(pos, tlib2, outdir)
 	pos_already_reached(pos) 
 	local netw = {}
 	local node = N(pos)
-	local net_name = tlib2.tube_type
+	local netw_type = tlib2.tube_type
 	-- outdir corresponds to the indir coming from
-	connection_walk(pos, outdir and {outdir}, nil, node, tlib2, function(pos, indir, node)
-		local ndef = net_def2(pos, node.name, net_name)
+	connection_walk(pos, {outdir}, Flip[outdir], node, tlib2, function(pos, indir, node)
+		local ndef = net_def2(pos, node.name, netw_type)
 		-- ntype can be a string or an array of strings or nil
 		local ntypes = ndef.ntype or {}
 		if type(ntypes) == "string" then
@@ -333,9 +333,9 @@ local function get_netID(pos, tlib2, outdir)
 end
 
 -- determine network ID (largest hash number of all nodes with given type)
-local function determine_netID(tlib2, netw)
+local function determine_netID(tlib2, netw, node_type)
 	local netID = 0
-	for _, item in ipairs(netw[tlib2.tube_type] or {}) do
+	for _, item in ipairs(netw[node_type] or {}) do
 		local outdir = Flip[item.indir]
 		local new = minetest.hash_node_position(item.pos) * 8 + outdir
 		if netID <= new then
@@ -347,11 +347,15 @@ end
 
 -- store network ID for each network node
 local function store_netID(tlib2, netw, netID)
-	for _, item in ipairs(netw[tlib2.tube_type] or {}) do
-		local hash = minetest.hash_node_position(item.pos)
-		local outdir = Flip[item.indir]
-		NetIDs[hash] = NetIDs[hash] or {}
-		NetIDs[hash][outdir] = netID
+	for _, table in pairs(netw) do
+		if type(table) == "table" then
+			for _, item in ipairs(table) do
+				local hash = minetest.hash_node_position(item.pos)
+				local outdir = Flip[item.indir]
+				NetIDs[hash] = NetIDs[hash] or {}
+				NetIDs[hash][outdir] = netID
+			end
+		end
 	end
 	set_network(tlib2.tube_type, netID, netw)
 end
@@ -403,7 +407,7 @@ function networks.update_network(pos, outdir, tlib2)
 end
 
 -- Make sure the block has a network and return netID
-function networks.get_netID(pos, tlib2, outdir)
+function networks.get_netID(pos, tlib2, outdir, node_type)
 	local netID = get_netID(pos, tlib2, outdir)
 	if netID then   
 		return netID
@@ -411,7 +415,7 @@ function networks.get_netID(pos, tlib2, outdir)
 	
 	local netw = collect_network_nodes(pos, tlib2, outdir)
 	output(netw, true)
-	netID = determine_netID(tlib2, netw)
+	netID = determine_netID(tlib2, netw, node_type)
 	if netID > 0 then
 		store_netID(tlib2, netw, netID)
 		return netID
@@ -419,8 +423,8 @@ function networks.get_netID(pos, tlib2, outdir)
 end
 
 -- return list of nodes {pos = ..., indir = ...} of given network
-function networks.get_network_table(pos, tlib2, outdir)
-	local netID = networks.get_netID(pos, tlib2, outdir)
+function networks.get_network_table(pos, tlib2, outdir, node_type)
+	local netID = networks.get_netID(pos, tlib2, outdir, node_type)
 	if netID then
 		local netw = get_network(tlib2.tube_type, netID)
 		return netw or {}

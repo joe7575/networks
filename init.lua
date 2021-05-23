@@ -23,8 +23,9 @@ local MP = minetest.get_modpath("networks")
 
 dofile(MP .. "/networks.lua")
 dofile(MP .. "/junction.lua")
-dofile(MP .. "/storage.lua")
 dofile(MP .. "/power.lua")
 --dofile(MP .. "/liquids.lua")
+dofile(MP .. "/storage.lua")
+
 -- Only for testing/demo purposes
 dofile(MP .. "/test.lua")

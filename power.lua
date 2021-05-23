@@ -16,8 +16,9 @@ local P2S = function(pos) if pos then return minetest.pos_to_string(pos) end end
 local M = minetest.get_meta
 local N = tubelib2.get_node_lvm
 
-local DEFAULT_CAPA = 100
+networks.Power = {}
 
+local DEFAULT_CAPA = 100
 local Power = networks.Power   -- {netID = {curr_load, max_capa}}
 
 -- Determine load and capa for the all network storage systems
@@ -26,8 +27,8 @@ local function get_storage_load(pos, tlib2, outdir)
 	local max_capa = DEFAULT_CAPA
 	local curr_load = 0
 	for _,item in ipairs(netw.sto or {}) do
-		local ndef = networks.net_def(pos, tlib2.tube_type)
-		local cload, mcapa = N(pos).get_storage_load(pos)
+		local ndef = minetest.registered_nodes[N(item.pos).name]
+		local cload, mcapa = ndef.get_storage_load(item.pos)
 		curr_load = curr_load + cload
 		max_capa = max_capa + mcapa
 	end
@@ -38,7 +39,7 @@ end
 -- For consumers, outdir is optional
 function networks.power_available(pos, tlib2, outdir)
 	outdir = outdir or networks.get_default_outdir(pos, tlib2)
-	local netID = networks.get_netID(pos, tlib2, outdir)
+	local netID = networks.get_netID(pos, tlib2, outdir, "gen")
 	if netID then
 		local pwr = Power[netID] or get_storage_load(pos, tlib2, outdir)
 		return pwr.curr_load > 0
@@ -48,7 +49,7 @@ end
 -- For consumers, outdir is optional
 function networks.consume_power(pos, tlib2, outdir, amount)
 	outdir = outdir or networks.get_default_outdir(pos, tlib2)
-	local netID = networks.get_netID(pos, tlib2, outdir)
+	local netID = networks.get_netID(pos, tlib2, outdir, "gen")
 	if netID then
 		local pwr = Power[netID] or get_storage_load(pos, tlib2, outdir)
 		if pwr.curr_load >= amount then
@@ -66,18 +67,14 @@ function networks.consume_power(pos, tlib2, outdir, amount)
 end
 
 function networks.provide_power(pos, tlib2, outdir, amount)
-	print(1)
-	local netID = networks.get_netID(pos, tlib2, outdir)
+	local netID = networks.get_netID(pos, tlib2, outdir, "gen")
 	if netID then
-	print(2)
 		local pwr = Power[netID] or get_storage_load(pos, tlib2, outdir)
 		if pwr.curr_load + amount <= pwr.max_capa then
-	print(3)
 			pwr.curr_load = pwr.curr_load + amount
 			Power[netID] = pwr
 			return amount
 		else
-	print(4)
 			local provided = pwr.max_capa - pwr.curr_load
 			pwr.curr_load = pwr.max_capa
 			Power[netID] = pwr
@@ -91,7 +88,7 @@ end
 -- Param outdir is optional
 function networks.get_storage_load(pos, tlib2, outdir)
 	outdir = outdir or networks.get_default_outdir(pos, tlib2)
-	local netID = networks.get_netID(pos, tlib2, outdir)
+	local netID = networks.get_netID(pos, tlib2, outdir, "gen")
 	if netID then
 		local pwr = Power[netID] or get_storage_load(pos, tlib2, outdir)
 		return pwr.curr_load / pwr.max_capa
