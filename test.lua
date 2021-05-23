@@ -21,50 +21,9 @@ local GEN_MAX = 20
 local CON_MAX = 5
 
 -------------------------------------------------------------------------------
--- Debugging
--------------------------------------------------------------------------------
-local function debug_info(pos, text)
-	local marker = minetest.add_entity(pos, "networks:marker_cube")
-	if marker ~= nil then
-		if text == "add" then
-			marker:set_nametag_attributes({color = "#FF0000", text = "add__________"})
-		elseif text == "del" then
-			marker:set_nametag_attributes({color = "#00FF00", text = "_____del_____"})
-		elseif text == "noc" then
-			marker:set_nametag_attributes({color = "#0000FF", text = "__________noc"})
-		end
-		minetest.after(6, marker.remove, marker)
-	end
-end
-
-minetest.register_entity(":networks:marker_cube", {
-	initial_properties = {
-		visual = "cube",
-		textures = {
-			"networks_marker.png",
-			"networks_marker.png",
-			"networks_marker.png",
-			"networks_marker.png",
-			"networks_marker.png",
-			"networks_marker.png",
-		},
-		physical = false,
-		visual_size = {x = 1.1, y = 1.1},
-		collisionbox = {-0.55,-0.55,-0.55, 0.55,0.55,0.55},
-		glow = 8,
-	},
-	on_punch = function(self)
-		self.object:remove()
-	end,
-})
-
--------------------------------------------------------------------------------
 -- Cable
 -------------------------------------------------------------------------------
 local Cable = tubelib2.Tube:new({
-	                -- North, East, South, West, Down, Up
-	-- dirs_to_check = {1,2,3,4}, -- horizontal only
-	-- dirs_to_check = {5,6},  -- vertical only
 	dirs_to_check = {1,2,3,4,5,6},
 	max_tube_length = 20, 
 	show_infotext = true,
@@ -108,6 +67,7 @@ minetest.register_node("networks:cableS", {
 	},
 	on_rotate = screwdriver.disallow, -- important!
 	paramtype = "light",
+	use_texture_alpha = "clip",
 	sunlight_propagates = true,
 	is_ground_content = false,
 	groups = {crumbly = 3, cracky = 3, snappy = 3},
@@ -138,6 +98,7 @@ minetest.register_node("networks:cableA", {
 	},
 	on_rotate = screwdriver.disallow, -- important!
 	paramtype = "light",
+	use_texture_alpha = "clip",
 	sunlight_propagates = true,
 	is_ground_content = false,
 	groups = {crumbly = 3, cracky = 3, snappy = 3, not_in_creative_inventory=1},
@@ -204,7 +165,7 @@ minetest.register_node("networks:generator", {
 		local outdir = networks.side_to_outdir(pos, "F")
 		M(pos):set_int("outdir", outdir)
 		Cable:after_place_node(pos, {outdir})		
-		minetest.get_node_timer(pos):start(2)
+		M(pos):set_string("infotext", "off")
 	end,
 
 	after_dig_node = function(pos, oldnode, oldmetadata, digger)
@@ -216,7 +177,7 @@ minetest.register_node("networks:generator", {
 		local outdir = M(pos):get_int("outdir")
 		local mem = tubelib2.get_mem(pos)
 		mem.provided = networks.provide_power(pos, Cable, outdir, GEN_MAX)
-		M(pos):set_string("infotext", "running "..mem.provided)
+		M(pos):set_string("infotext", "providing "..mem.provided)
 		return true
 	end,
 	
@@ -224,21 +185,21 @@ minetest.register_node("networks:generator", {
 		local mem = tubelib2.get_mem(pos)
 		if mem.running then
 			mem.running = false
-			M(pos):set_string("infotext", "stopped")
+			M(pos):set_string("infotext", "off")
 			minetest.get_node_timer(pos):stop()
 		else
 			mem.provided = mem.provided or 0
 			mem.running = true
-			M(pos):set_string("infotext", "running "..mem.provided)
+			M(pos):set_string("infotext", "providing "..mem.provided)
 			minetest.get_node_timer(pos):start(CYCLE_TIME)
 		end
 	end,
 	
 	networks = {
-      ele = {
-          sides = networks.AllSides,
-          ntype = "gen",
-      },
+		ele = {
+		  sides = networks.AllSides,
+		  ntype = "gen",
+		},
 	},
 	
 	paramtype2 = "facedir", -- important!
@@ -319,7 +280,7 @@ local netdef = {
 
 minetest.register_node("networks:consumer", {
 	description = "Consumer",
-	tiles = {'networks_con.png'},
+	tiles = {'networks_con.png^[colorize:#000000:50'},
 	
 	on_turn_on = on_turn_on,
 	on_timer = node_timer,
@@ -385,10 +346,10 @@ minetest.register_node("networks:storage", {
 		return mem.load or 0, STORAGE_CAPA
 	end,
 	networks = {
-      ele = {
-          sides = networks.AllSides,
-          ntype = "sto",
-      },
+		ele = {
+		  sides = networks.AllSides,
+		  ntype = "sto",
+		},
 	},
 	paramtype2 = "facedir",
 	groups = {choppy = 2, cracky = 2, crumbly = 2},

@@ -22,7 +22,10 @@ end
 
 minetest.register_on_mods_loaded(function()
 	local version = storage:get_int("Version")
-	networks.Power = minetest.deserialize(storage:get_string("Power")) or {}
+	local tbl = minetest.deserialize(storage:get_string("Power")) or {}
+	for k, v in pairs(tbl) do
+		networks.Power[k] = v
+	end
 	minetest.after(600, update_mod_storage)
 end)
 

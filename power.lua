@@ -66,19 +66,28 @@ function networks.consume_power(pos, tlib2, outdir, amount)
 	return 0
 end
 
-function networks.provide_power(pos, tlib2, outdir, amount)
+-- amount is the maximum power, the generator can provide.
+-- cp1 and cp2 are control points for the charge regulator.
+-- From cp1 the charging power is reduced more and more and reaches zero at cp2.
+function networks.provide_power(pos, tlib2, outdir, amount, cp1, cp2)
 	local netID = networks.get_netID(pos, tlib2, outdir, "gen")
 	if netID then
 		local pwr = Power[netID] or get_storage_load(pos, tlib2, outdir)
-		if pwr.curr_load + amount <= pwr.max_capa then
+		local x = pwr.curr_load / pwr.max_capa
+		cp1 = cp1 or 0.5
+		cp2 = cp2 or 1.0
+		if x < cp1 then  -- charge with full power
 			pwr.curr_load = pwr.curr_load + amount
 			Power[netID] = pwr
 			return amount
-		else
-			local provided = pwr.max_capa - pwr.curr_load
-			pwr.curr_load = pwr.max_capa
+		elseif x < cp2 then  -- charge with reduced power
+			local factor = 1 - ((x - cp1) / (cp2 - cp1))
+			local provided = amount * factor
+			pwr.curr_load = pwr.curr_load + provided
 			Power[netID] = pwr
 			return provided
+		else  -- turn off
+			return 0
 		end
 	end
 	return 0
