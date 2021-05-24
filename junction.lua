@@ -55,7 +55,7 @@ function networks.register_junction(name, size, boxes, tlib2, node, index)
 		ndef.drawtype = "nodebox"
 		ndef.node_box = get_node_box(idx, size, boxes)
 		ndef.paramtype2 = "facedir"
-		ndef.on_rotate = screwdriver.disallow  -- TODO: allow controlled rotation
+		ndef.on_rotate = screwdriver.disallow
 		ndef.drop = name..(index or "0")
 		minetest.register_node(name..idx, ndef)
 		tlib2:add_secondary_node_names({name..idx})

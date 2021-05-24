@@ -19,11 +19,6 @@ local N = tubelib2.get_node_lvm
 local DEFAULT_CAPA = 100
 local Power = {}  -- {netID = {curr_load, max_capa}}
 
-local function is_switchbox(pos)
-	return N(pos).name == "techage:powerswitch_box" or 
-		M(pos):get_string("techage_hidden_nodename") == "techage:powerswitch_box"
-end
-
 -- Determine load and capa for all network storage systems
 local function get_storage_load(pos, tlib2, outdir)
 	local netw = networks.get_network_table(pos, tlib2, outdir)
@@ -111,50 +106,35 @@ function networks.get_storage_load(pos, tlib2, outdir)
 	end
 end
 
-local function switch_on(pos, node, clicker, name)
-	if clicker and minetest.is_protected(pos, clicker:get_player_name()) then
-		return
-	end
-	node.name = name
-	minetest.swap_node(pos, node)
-	minetest.sound_play("techage_button", {
-			pos = pos,
-			gain = 0.5,
-			max_hear_distance = 5,
-		})
-	local dir = Param2ToDir[node.param2]
-	local pos2 = tubelib2.get_pos(pos, dir)
-	
-	if is_switchbox(pos2) then
-		if M(pos2):get_int("tl2_param2_copy") == 0 then
-			M(pos2):set_int("tl2_param2", techage.get_node_lvm(pos2).param2)
-		else
-			M(pos2):set_int("tl2_param2", M(pos2):get_int("tl2_param2_copy"))
-		end
-		Cable:after_place_tube(pos2, clicker)
+function networks.turn_switch_on(pos, tlib2, name_off, name_on)
+	local node = N(pos)
+	local meta = M(pos)
+	if node.name == name_off then
+		node.name = name_on
+		minetest.swap_node(pos, node)
+		tlib2:after_place_tube(pos)
+		meta:set_int("tl2_param2", node.param2)
+		return true
+	elseif meta:contains("tl2_param2_copy") then
+		meta:set_int("tl2_param2", meta:get_int("tl2_param2_copy"))
+		tlib2:after_place_tube(pos)
+		return true
 	end
 end
 
-local function switch_off(pos, node, clicker, name)
-	if clicker and minetest.is_protected(pos, clicker:get_player_name()) then
-		return
-	end
-	node.name = name
-	minetest.swap_node(pos, node)
-	minetest.get_node_timer(pos):stop()
-	minetest.sound_play("techage_button", {
-			pos = pos,
-			gain = 0.5,
-			max_hear_distance = 5,
-		})
-	local dir = Param2ToDir[node.param2]
-	local pos2 = tubelib2.get_pos(pos, dir)
-	
-	if is_switchbox(pos2) then
-		local node2 = techage.get_node_lvm(pos2)
-		node2.param2 = M(pos2):get_int("tl2_param2")
-		M(pos2):set_int("tl2_param2_copy", M(pos2):get_int("tl2_param2"))
-		M(pos2):set_int("tl2_param2", 0)
-		Cable:after_dig_tube(pos2, node2)
+function networks.turn_switch_off(pos, tlib2, name_off, name_on)
+	local node = N(pos)
+	local meta = M(pos)
+	if node.name == name_on then
+		node.name = name_off
+		minetest.swap_node(pos, node)
+		tlib2:after_dig_tube(pos, node)
+		meta:set_int("tl2_param2", 0)
+		return true
+	elseif meta:contains("tl2_param2") then
+		meta:set_int("tl2_param2_copy", meta:get_int("tl2_param2"))
+		meta:set_int("tl2_param2", 0)
+		tlib2:i(pos, node)
+		return true
 	end
 end
