@@ -4,7 +4,7 @@ A library to build and manage networks based on tubelib2 tubes, pipes, or cables
 
 **This library is heavily under development. API changes and crashes are likely!**
 
-![networks](https://github.com/joe7575/networks/blob/master/screenshot.png)
+![networks](https://github.com/joe7575/networks/blob/main/screenshot.png)
 
 
 ### Power Networks
