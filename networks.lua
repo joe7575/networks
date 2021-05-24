@@ -16,7 +16,7 @@
 --	networks = {
 --      ele3 = {                        -- network type
 --          sides = networks.AllSides,  -- node connection sides
---          ntype = "con",              -- node type(s) (can be a list)
+--          ntype = "con",              -- node type (one of "con", "gen", "sto", "junc", or others)
 --      },
 --	}
 
@@ -41,37 +41,46 @@ local Flip = {[0]=0,3,4,1,2,6,5} -- 180 degree turn
 -------------------------------------------------------------------------------
 -- Debugging
 -------------------------------------------------------------------------------
---local function error(pos, msg)
---	minetest.log("error", "[networks] "..msg.." at "..P2S(pos).." "..N(pos).name)
---end
 
---local function count_nodes(node_type, nodes)
---	local num = 0
---	for _,pos in ipairs(nodes or {}) do
---		num = num + 1
---	end
---	return node_type.."="..num
---end
+-- Maintain simple numbers for the bulky netID hashes
+local DbgNetIDs = {}
+local DbgCounter = 1
 
-local function output(network)
-	local tbl = {}
-	for node_type,table in pairs(network) do
-		if type(table) == "table" then
-			tbl[#tbl+1] = "#" .. node_type .. " = " .. #table
+local function netw_num(netID)
+	if not DbgNetIDs[netID] then
+		DbgNetIDs[netID] = DbgCounter
+		DbgCounter = DbgCounter + 1
+	end
+	return DbgNetIDs[netID]
+end
+	
+local function debug()
+	local t = Networks["test"] or {}
+	for  netID, network in pairs(t) do
+		local tbl = {}
+		for node_type,table in pairs(network) do
+			if type(table) == "table" then
+				tbl[#tbl+1] = "#" .. node_type .. " = " .. #table
+			end
+		end
+		tbl[#tbl+1] = "num_nodes = " .. network.num_nodes
+		print("Network " .. netw_num(netID) .. ": " .. table.concat(tbl, ", "))
+		
+		
+		for hash, item in pairs(NetIDs) do
+			tbl = {}
+			for dir = 0,6 do
+				netID = item[dir]
+				if netID then
+					tbl[#tbl+1] = "dir " .. dir .. " = netw " .. netw_num(netID)
+				end
+			end
+			print("NetIDs " .. N(minetest.get_position_from_hash(hash)).name .. ": " .. table.concat(tbl, ", "))
 		end
 	end
-	print("Network: "..table.concat(tbl, ", "))
+	minetest.after(4, debug)
 end
-
-local function debug(node_type)
-	local tbl = {}
-	for netID,netw in pairs(Networks[node_type] or {}) do
-		if type(netw) == "table" then
-			tbl[#tbl+1] = string.format("%X", netID)
-		end
-	end
-	return "Networks: "..table.concat(tbl, ", ")
-end
+minetest.after(4, debug)
 
 -------------------------------------------------------------------------------
 -- Helper
@@ -84,7 +93,7 @@ local function hidden_node(pos, netw_type)
 		return ndef.networks[netw_type] or {} 
 	end
 	-- new name
-	name = M(pos):get_string("networks_hidden_nodename")
+	name = M(pos):get_string("tl2_hidden_nodename")
 	ndef = minetest.registered_nodes[name]
 	if ndef and ndef.networks then
 		return ndef.networks[netw_type] or {} 
@@ -153,6 +162,15 @@ local function side_to_outdir(pos, side)
 	return dir_to_outdir(SideToDir[side], N(pos).param2)
 end
 
+-- determine outdir based on node type
+local function get_outdir(node_type, indir)
+	if node_type == "junc" then
+		return 0 -- same network on all sides
+	else
+		return Flip[indir]
+	end
+end
+
 -------------------------------------------------------------------------------
 -- Node Connections
 -------------------------------------------------------------------------------
@@ -191,6 +209,14 @@ local function store_node_connection_sides(pos, tlib2)
 	end
 end
 
+-- In outdir is given, return outdir, otherwise return all dirs with connections
+local function get_outdirs(pos, tlib2, outdir)
+	if outdir then
+		return {outdir}
+	end
+	return get_node_connection_dirs(pos, tlib2.tube_type)
+end
+
 -------------------------------------------------------------------------------
 -- Connection Walk
 -------------------------------------------------------------------------------
@@ -215,31 +241,20 @@ end
 
 local function is_junction(pos, name, tube_type)
 	local ndef = net_def2(pos, name, tube_type)
-	-- ntype can be a string or an array of strings or nil
-	if ndef.ntype == "junc" then
-		return true
-	end
-	if type(ndef.ntype) == "table" then
-		for _,ntype in ipairs(ndef.ntype) do
-			if ntype == "junc" then 
-				return true 
-			end
-		end
-	end
-	return false
+	return ndef.ntype == "junc"
 end
 
--- do the walk through the tubelib2 network
--- indir is the direction which should not be covered by the walk
--- (coming from there)
--- if outdirs is given, only this dirs are used
-local function connection_walk(pos, outdirs, indir, node, tlib2, clbk)
+-- Do the walk through the tubelib2 network.
+-- `indir` is the direction which should not be covered by the walk
+-- (coming from there).
+-- if outdir is given, only this dir is used
+local function connection_walk(pos, outdir, indir, node, tlib2, clbk)
 	if clbk then clbk(pos, indir, node) end
-	if outdirs or is_junction(pos, node.name, tlib2.tube_type) then
-		for _,outdir in pairs(outdirs or get_node_connection_dirs(pos, tlib2.tube_type)) do
+	if outdir or is_junction(pos, node.name, tlib2.tube_type) then
+		for _,outdir in ipairs(get_outdirs(pos, tlib2, outdir)) do
 			local pos2, indir2 = tlib2:get_connected_node_pos(pos, outdir)
 			local node = N(pos2)
-			if not pos_already_reached(pos2) and valid_indir(pos2, indir2, node, tlib2.tube_type) then
+			if valid_indir(pos2, indir2, node, tlib2.tube_type) and not pos_already_reached(pos2) then
 				connection_walk(pos2, nil, indir2, node, tlib2, clbk)
 			end
 		end
@@ -254,17 +269,10 @@ local function collect_network_nodes(pos, tlib2, outdir)
 	local node = N(pos)
 	local netw_type = tlib2.tube_type
 	-- outdir corresponds to the indir coming from
-	connection_walk(pos, {outdir}, Flip[outdir], node, tlib2, function(pos, indir, node)
-		local ndef = net_def2(pos, node.name, netw_type)
-		-- ntype can be a string or an array of strings or nil
-		local ntypes = ndef.ntype or {}
-		if type(ntypes) == "string" then
-			ntypes = {ntypes}
-		end
-		for _,ntype in ipairs(ntypes) do
-			if not netw[ntype] then netw[ntype] = {} end
-			netw[ntype][#netw[ntype] + 1] = {pos = pos, indir = indir}
-		end
+	connection_walk(pos, outdir, Flip[outdir], node, tlib2, function(pos, indir, node)
+		local ntype = net_def2(pos, node.name, netw_type).ntype
+		if not netw[ntype] then netw[ntype] = {} end
+		netw[ntype][#netw[ntype] + 1] = {pos = pos, indir = indir}
 	end)
 	netw.ttl = minetest.get_gametime() + TTL
 	netw.num_nodes = NumNodes
@@ -297,7 +305,6 @@ local function delete_network(netw_type, netID)
 end
 
 -- keep data base small and valid
--- needed for networks without scheduler
 local function remove_outdated_networks()
 	local to_be_deleted = {}
 	local t = minetest.get_gametime()
@@ -312,6 +319,7 @@ local function remove_outdated_networks()
 	for _,item in ipairs(to_be_deleted) do
 		local net_name, netID = unpack(item)
 		Networks[net_name][netID] = nil
+		print("Network " .. netw_num(netID) .. " timed out")
 	end
 	minetest.after(60, remove_outdated_networks)
 end
@@ -321,14 +329,15 @@ minetest.after(60, remove_outdated_networks)
 -- Maintain netID
 -------------------------------------------------------------------------------
 
--- Return node netID if available
-local function get_netID(pos, tlib2, outdir)
+-- Return node netID and netwotk if available.
+-- The function updates the network TTL, thus keeping the network alive.
+local function get_netID_and_network(pos, tlib2, outdir)
 	local hash = minetest.hash_node_position(pos)
 	NetIDs[hash] = NetIDs[hash] or {}
 	local netID = NetIDs[hash][outdir]
 	
-	if netID and get_network(tlib2.tube_type, netID) then   
-		return netID
+	if netID then
+		return netID, get_network(tlib2.tube_type, netID)
 	end
 end
 
@@ -347,11 +356,11 @@ end
 
 -- store network ID for each network node
 local function store_netID(tlib2, netw, netID)
-	for _, table in pairs(netw) do
+	for node_type, table in pairs(netw) do
 		if type(table) == "table" then
 			for _, item in ipairs(table) do
 				local hash = minetest.hash_node_position(item.pos)
-				local outdir = Flip[item.indir]
+				local outdir = get_outdir(node_type, item.indir)
 				NetIDs[hash] = NetIDs[hash] or {}
 				NetIDs[hash][outdir] = netID
 			end
@@ -360,13 +369,21 @@ local function store_netID(tlib2, netw, netID)
 	set_network(tlib2.tube_type, netID, netw)
 end
 
--- delete network and netID for given pos
+-- delete network and netID for all nodes in the network
+-- `outdir` shall be 0 for junctions
 local function delete_netID(pos, tlib2, outdir)
-	local netID = get_netID(pos, tlib2, outdir)
-	
-	if netID then
-		local hash = minetest.hash_node_position(pos)
-		NetIDs[hash][outdir] = nil
+	local netID, netw = get_netID_and_network(pos, tlib2, outdir)
+	if netID and netw then
+		for node_type, table in pairs(netw) do
+			if type(table) == "table" then
+				for _, item in ipairs(table) do
+					local hash = minetest.hash_node_position(item.pos)
+					local outdir = get_outdir(node_type, item.indir)
+					NetIDs[hash][outdir] = nil
+					print("deleted")
+				end
+			end
+		end
 		delete_network(tlib2.tube_type, netID)
 	end
 end
@@ -392,9 +409,9 @@ networks.side_to_outdir = side_to_outdir
 -- networks.collect_network_nodes(pos, tlib2, outdir)
 --networks.collect_network_nodes = collect_network_nodes
 
--- Get node tubelib2 connections as table of outdirs
--- networks.get_node_connection_dirs(pos, netw_type)
-networks.get_node_connection_dirs = get_node_connection_dirs
+-- Function returns {outdir} or all node dirs with connections
+-- networks.get_outdirs(pos, tlib2, outdir)
+networks.get_outdirs = get_outdirs
 
 networks.MAX_NUM_NODES = MAX_NUM_NODES
 
@@ -402,67 +419,74 @@ networks.MAX_NUM_NODES = MAX_NUM_NODES
 -- 'output' is optional and only needed for nodes with dedicated
 -- pipe sides (e.g. pumps).
 function networks.update_network(pos, outdir, tlib2)
+	print("update_network", P2S(pos), N(pos).name)
 	store_node_connection_sides(pos, tlib2) -- update node internal data
-	delete_netID(pos, tlib2, outdir) -- delete node netID and network
+	delete_netID(pos, tlib2, outdir or 0) -- delete node netIDs and network
 end
 
--- Make sure the block has a network and return netID
+-- Provide or determine netID
+-- `node_type` is nedded to determine the netID
 function networks.get_netID(pos, tlib2, outdir, node_type)
-	local netID = get_netID(pos, tlib2, outdir)
+	local netID = get_netID_and_network(pos, tlib2, outdir)
 	if netID then   
 		return netID
 	end
 	
 	local netw = collect_network_nodes(pos, tlib2, outdir)
-	output(netw, true)
-	netID = determine_netID(tlib2, netw, node_type)
-	if netID > 0 then
-		store_netID(tlib2, netw, netID)
-		return netID
+	if netw.num_nodes > 1 then
+		netID = determine_netID(tlib2, netw, node_type)
+		if netID > 0 then
+			store_netID(tlib2, netw, netID)
+			return netID
+		end
 	end
 end
 
--- return list of nodes {pos = ..., indir = ...} of given network
-function networks.get_network_table(pos, tlib2, outdir, node_type)
-	local netID = networks.get_netID(pos, tlib2, outdir, node_type)
-	if netID then
-		local netw = get_network(tlib2.tube_type, netID)
-		return netw or {}
-	end
-	return {}
+-- Provide network with all node tables
+function networks.get_network_table(pos, tlib2, outdir)
+	local netID, netw = get_netID_and_network(pos, tlib2, outdir)
+	return netw or {}
 end
 
-function networks.get_default_outdir(pos, tlib2)
-	local dirs = networks.get_node_connection_dirs(pos, tlib2.tube_type)
-	if #dirs > 0 then
-		return dirs[1]
+-- Override methods of tubelib2 to store tube/cable info as metadata.
+-- This allows hidden cables/tubes/junctions/switches.
+function networks.use_metadata(tlib2)
+	tlib2.get_primary_node_param2 = function(self, pos, dir)
+		local npos = vector.add(pos, tubelib2.Dir6dToVector[dir or 0])
+		local param2 = M(npos):get_int("tl2_param2")
+		if param2 ~= 0 then
+			return param2, npos
+		end
 	end
-	return 1
+	tlib2.is_primary_node = function(self, pos, dir)
+		local npos = vector.add(pos, tubelib2.Dir6dToVector[dir or 0])
+		local param2 = M(npos):get_int("tl2_param2")
+		return param2 ~= 0
+	end
+	tlib2.get_secondary_node = function(self, pos, dir)
+		local npos = vector.add(pos, tubelib2.Dir6dToVector[dir or 0])
+		local node = self:get_node_lvm(npos)
+		if self.secondary_node_names[node.name] or 
+				self.secondary_node_names[M(npos):get_string("tl2_hidden_nodename")] or
+				self.secondary_node_names[M(npos):get_string("techage_hidden_nodename")] then
+			return node, npos, true
+		end
+	end
+	tlib2.is_secondary_node = function(self, pos, dir)
+		local npos = vector.add(pos, tubelib2.Dir6dToVector[dir or 0])
+		local node = self:get_node_lvm(npos)
+		return self.secondary_node_names[node.name] or 
+				self.secondary_node_names[M(npos):get_string("tl2_hidden_nodename")] or
+				self.secondary_node_names[M(npos):get_string("techage_hidden_nodename")]
+	end
 end
 
-
----- Overridden method of tubelib2!
---function Cable:get_primary_node_param2(pos, dir) 
---	return techage.get_primary_node_param2(pos, dir)
---end
-
---function Cable:is_primary_node(pos, dir)
---	return techage.is_primary_node(pos, dir)
---end
-
---function Cable:get_secondary_node(pos, dir)
---	local npos = vector.add(pos, tubelib2.Dir6dToVector[dir or 0])
---	local node = self:get_node_lvm(npos)
---	if self.secondary_node_names[node.name] or 
---			self.secondary_node_names[M(npos):get_string("techage_hidden_nodename")] then
---		return node, npos, true
---	end
---end
-
---function Cable:is_secondary_node(pos, dir)
---	local npos = vector.add(pos, tubelib2.Dir6dToVector[dir or 0])
---	local node = self:get_node_lvm(npos)
---	return self.secondary_node_names[node.name] or 
---			self.secondary_node_names[M(npos):get_string("techage_hidden_nodename")]
---end
-
+-- Function is called from `tubelib2.after_place_tube` callback
+-- Handle tube/cable nodes with 'use_metadata' feature, to change only the metadata,
+-- and not to replace the node.
+-- Function returns true, if node still has to be replaced.
+function networks.node_to_be_replaced(pos, param2, tube_type, num_tubes)
+	M(pos):set_int("tl2_param2", param2)
+	return M(pos):get_string("tl2_hidden_nodename") == "" and
+		M(pos):get_string("techage_hidden_nodename") == ""
+end

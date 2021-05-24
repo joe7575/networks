@@ -16,12 +16,15 @@ local P2S = function(pos) if pos then return minetest.pos_to_string(pos) end end
 local M = minetest.get_meta
 local N = tubelib2.get_node_lvm
 
-networks.Power = {}
-
 local DEFAULT_CAPA = 100
-local Power = networks.Power   -- {netID = {curr_load, max_capa}}
+local Power = {}  -- {netID = {curr_load, max_capa}}
 
--- Determine load and capa for the all network storage systems
+local function is_switchbox(pos)
+	return N(pos).name == "techage:powerswitch_box" or 
+		M(pos):get_string("techage_hidden_nodename") == "techage:powerswitch_box"
+end
+
+-- Determine load and capa for all network storage systems
 local function get_storage_load(pos, tlib2, outdir)
 	local netw = networks.get_network_table(pos, tlib2, outdir)
 	local max_capa = DEFAULT_CAPA
@@ -38,29 +41,31 @@ end
 -- Function checks for a power grid, not for enough power
 -- For consumers, outdir is optional
 function networks.power_available(pos, tlib2, outdir)
-	outdir = outdir or networks.get_default_outdir(pos, tlib2)
-	local netID = networks.get_netID(pos, tlib2, outdir, "gen")
-	if netID then
-		local pwr = Power[netID] or get_storage_load(pos, tlib2, outdir)
-		return pwr.curr_load > 0
+	for _,outdir in ipairs(networks.get_outdirs(pos, tlib2, outdir)) do
+		local netID = networks.get_netID(pos, tlib2, outdir, "gen")
+		if netID then
+			local pwr = Power[netID] or get_storage_load(pos, tlib2, outdir)
+			return pwr.curr_load > 0
+		end
 	end
 end
 
 -- For consumers, outdir is optional
 function networks.consume_power(pos, tlib2, outdir, amount)
-	outdir = outdir or networks.get_default_outdir(pos, tlib2)
-	local netID = networks.get_netID(pos, tlib2, outdir, "gen")
-	if netID then
-		local pwr = Power[netID] or get_storage_load(pos, tlib2, outdir)
-		if pwr.curr_load >= amount then
-			pwr.curr_load = pwr.curr_load - amount
-			Power[netID] = pwr
-			return amount
-		else
-			local consumed = pwr.curr_load
-			pwr.curr_load = 0
-			Power[netID] = pwr
-			return consumed
+	for _,outdir in ipairs(networks.get_outdirs(pos, tlib2, outdir)) do
+		local netID = networks.get_netID(pos, tlib2, outdir, "gen")
+		if netID then
+			local pwr = Power[netID] or get_storage_load(pos, tlib2, outdir)
+			if pwr.curr_load >= amount then
+				pwr.curr_load = pwr.curr_load - amount
+				Power[netID] = pwr
+				return amount
+			else
+				local consumed = pwr.curr_load
+				pwr.curr_load = 0
+				Power[netID] = pwr
+				return consumed
+			end
 		end
 	end
 	return 0
@@ -95,12 +100,61 @@ end
 
 -- Function returns the load/charge as ratio (0..1)
 -- Param outdir is optional
+-- Function provides nil if no network is available
 function networks.get_storage_load(pos, tlib2, outdir)
-	outdir = outdir or networks.get_default_outdir(pos, tlib2)
-	local netID = networks.get_netID(pos, tlib2, outdir, "gen")
-	if netID then
-		local pwr = Power[netID] or get_storage_load(pos, tlib2, outdir)
-		return pwr.curr_load / pwr.max_capa
+	for _,outdir in ipairs(networks.get_outdirs(pos, tlib2, outdir)) do
+		local netID = networks.get_netID(pos, tlib2, outdir, "gen")
+		if netID then
+			local pwr = Power[netID] or get_storage_load(pos, tlib2, outdir)
+			return pwr.curr_load / pwr.max_capa
+		end
 	end
-	return 0
+end
+
+local function switch_on(pos, node, clicker, name)
+	if clicker and minetest.is_protected(pos, clicker:get_player_name()) then
+		return
+	end
+	node.name = name
+	minetest.swap_node(pos, node)
+	minetest.sound_play("techage_button", {
+			pos = pos,
+			gain = 0.5,
+			max_hear_distance = 5,
+		})
+	local dir = Param2ToDir[node.param2]
+	local pos2 = tubelib2.get_pos(pos, dir)
+	
+	if is_switchbox(pos2) then
+		if M(pos2):get_int("tl2_param2_copy") == 0 then
+			M(pos2):set_int("tl2_param2", techage.get_node_lvm(pos2).param2)
+		else
+			M(pos2):set_int("tl2_param2", M(pos2):get_int("tl2_param2_copy"))
+		end
+		Cable:after_place_tube(pos2, clicker)
+	end
+end
+
+local function switch_off(pos, node, clicker, name)
+	if clicker and minetest.is_protected(pos, clicker:get_player_name()) then
+		return
+	end
+	node.name = name
+	minetest.swap_node(pos, node)
+	minetest.get_node_timer(pos):stop()
+	minetest.sound_play("techage_button", {
+			pos = pos,
+			gain = 0.5,
+			max_hear_distance = 5,
+		})
+	local dir = Param2ToDir[node.param2]
+	local pos2 = tubelib2.get_pos(pos, dir)
+	
+	if is_switchbox(pos2) then
+		local node2 = techage.get_node_lvm(pos2)
+		node2.param2 = M(pos2):get_int("tl2_param2")
+		M(pos2):set_int("tl2_param2_copy", M(pos2):get_int("tl2_param2"))
+		M(pos2):set_int("tl2_param2", 0)
+		Cable:after_dig_tube(pos2, node2)
+	end
 end

@@ -20,22 +20,30 @@ local STORAGE_CAPA = 500
 local GEN_MAX = 20
 local CON_MAX = 5
 
+local function round(val)
+	return math.floor(val + 0.5)
+end
+
 -------------------------------------------------------------------------------
 -- Cable
 -------------------------------------------------------------------------------
 local Cable = tubelib2.Tube:new({
 	dirs_to_check = {1,2,3,4,5,6},
 	max_tube_length = 20, 
-	show_infotext = true,
-	tube_type = "ele",
+	tube_type = "test",
 	primary_node_names = {"networks:cableS", "networks:cableA"}, 
 	secondary_node_names = {
 		"networks:generator", "networks:consumer", "networks:consumer_on", 
 		"networks:junction", "networks:storage"},
 	after_place_tube = function(pos, param2, tube_type, num_tubes, tbl)
-		minetest.swap_node(pos, {name = "networks:cable"..tube_type, param2 = param2})
+		if networks.node_to_be_replaced(pos, param2, tube_type, num_tubes) then
+			minetest.swap_node(pos, {name = "networks:cable"..tube_type, param2 = param2})
+		end
 	end,
 })
+
+-- Enable hidden cables
+networks.use_metadata(Cable)
 
 minetest.register_node("networks:cableS", {
 	description = "Cable",
@@ -127,13 +135,13 @@ networks.register_junction("networks:junction", size, Boxes, Cable, {
 	tubelib2_on_update2 = function(pos, dir1, tlib2, node)
 		local name = "networks:junction"..networks.junction_type(pos, Cable)
 		minetest.swap_node(pos, {name = name, param2 = 0})
-		networks.update_network(pos, nil, tlib2)
+		networks.update_network(pos, 0, tlib2)
 	end,
 	after_dig_node = function(pos, oldnode, oldmetadata, digger)
 		Cable:after_dig_node(pos)
 	end,
 	networks = {
-		ele = {
+		test = {
 			sides = networks.AllSides, -- connection sides for cables
 			ntype = "junc",
 		},
@@ -160,27 +168,29 @@ minetest.register_node("networks:generator", {
 		'networks_gen.png',
 		'networks_conn.png',
 	},
-
 	after_place_node = function(pos, placer)
 		local outdir = networks.side_to_outdir(pos, "F")
 		M(pos):set_int("outdir", outdir)
 		Cable:after_place_node(pos, {outdir})		
 		M(pos):set_string("infotext", "off")
+		tubelib2.init_mem(pos)
 	end,
-
 	after_dig_node = function(pos, oldnode, oldmetadata, digger)
 		local outdir = tonumber(oldmetadata.fields.outdir or 0)
 		Cable:after_dig_node(pos, {outdir})
+		tubelib2.del_mem(pos)
 	end,
-	
 	on_timer = function(pos, elapsed)
 		local outdir = M(pos):get_int("outdir")
 		local mem = tubelib2.get_mem(pos)
 		mem.provided = networks.provide_power(pos, Cable, outdir, GEN_MAX)
-		M(pos):set_string("infotext", "providing "..mem.provided)
+		M(pos):set_string("infotext", "providing "..round(mem.provided))
 		return true
 	end,
-	
+	tubelib2_on_update2 = function(pos, outdir, tlib2, node)
+		print("tubelib2_on_update2")
+		networks.update_network(pos, outdir, tlib2)
+	end,
 	on_rightclick = function(pos, node, clicker)
 		local mem = tubelib2.get_mem(pos)
 		if mem.running then
@@ -190,18 +200,16 @@ minetest.register_node("networks:generator", {
 		else
 			mem.provided = mem.provided or 0
 			mem.running = true
-			M(pos):set_string("infotext", "providing "..mem.provided)
+			M(pos):set_string("infotext", "providing "..round(mem.provided))
 			minetest.get_node_timer(pos):start(CYCLE_TIME)
 		end
 	end,
-	
 	networks = {
-		ele = {
+		test = {
 		  sides = networks.AllSides,
 		  ntype = "gen",
 		},
 	},
-	
 	paramtype2 = "facedir", -- important!
 	on_rotate = screwdriver.disallow, -- important!
 	paramtype = "light",
@@ -223,7 +231,7 @@ local function swap_node(pos, name)
 	minetest.swap_node(pos, node)
 end
 
-local function on_turn_on(pos, tlib2)
+local function turn_on(pos, tlib2)
 	swap_node(pos, "networks:consumer_on")
 	M(pos):set_string("infotext", "on")
 	local mem = tubelib2.get_mem(pos)
@@ -231,7 +239,7 @@ local function on_turn_on(pos, tlib2)
 	minetest.get_node_timer(pos):start(CYCLE_TIME)
 end
 
-local function on_turn_off(pos, tlib2)
+local function turn_off(pos, tlib2)
 	swap_node(pos, "networks:consumer")
 	M(pos):set_string("infotext", "off")
 	local mem = tubelib2.get_mem(pos)
@@ -239,27 +247,19 @@ local function on_turn_off(pos, tlib2)
 	minetest.get_node_timer(pos):stop()
 end
 
-local function node_timer(pos, elapsed)
-	local consumed = networks.consume_power(pos, Cable, nil, CON_MAX)
-	if consumed < CON_MAX then
-		on_turn_off(pos, Cable)
-		return false
-	end
-	return true
-end
-
 local function on_rightclick(pos, node, clicker)
 	local mem = tubelib2.get_mem(pos)
 	if not mem.running and networks.power_available(pos, Cable) then
-		on_turn_on(pos, Cable)
+		turn_on(pos, Cable)
 	else
-		on_turn_off(pos, Cable)
+		turn_off(pos, Cable)
 	end
 end
 
 local function after_place_node(pos)
 	M(pos):set_string("infotext", "off")
 	Cable:after_place_node(pos)
+	tubelib2.init_mem(pos)
 end
 
 local function after_dig_node(pos, oldnode)
@@ -267,28 +267,20 @@ local function after_dig_node(pos, oldnode)
 	tubelib2.del_mem(pos)
 end
 
-local function tubelib2_on_update2(pos, outdir, tlib2, node) 
-	networks.update_network(pos, outdir, tlib2)
-end
-
-local netdef = {
-	ele = {
-		sides = networks.AllSides, -- connection sides for cables
-		ntype = "con",
-	},
-}
-
 minetest.register_node("networks:consumer", {
 	description = "Consumer",
 	tiles = {'networks_con.png^[colorize:#000000:50'},
 	
-	on_turn_on = on_turn_on,
-	on_timer = node_timer,
 	on_rightclick = on_rightclick,
 	after_place_node = after_place_node,
 	after_dig_node = after_dig_node,
-	tubelib2_on_update2 = tubelib2_on_update2,
-	networks = netdef,
+	tubelib2_on_update2 = networks.update_network,
+	networks = {
+		test = {
+			sides = networks.AllSides, -- connection sides for cables
+			ntype = "con",
+		},
+	},
 	paramtype = "light",
 	light_source = 0,	
 	paramtype2 = "facedir",
@@ -301,13 +293,24 @@ minetest.register_node("networks:consumer_on", {
 	description = "Consumer",
 	tiles = {'networks_con.png'},
 
-	on_turn_off = on_turn_off,
-	on_timer = node_timer,
+	on_timer = function(pos, elapsed)
+		local consumed = networks.consume_power(pos, Cable, nil, CON_MAX)
+		if consumed < CON_MAX then
+			turn_off(pos, Cable)
+			return false
+		end
+		return true
+	end,
 	on_rightclick = on_rightclick,
 	after_place_node = after_place_node,
 	after_dig_node = after_dig_node,
-	tubelib2_on_update2 = tubelib2_on_update2,
-	networks = netdef,
+	tubelib2_on_update2 = networks.update_network,
+	networks = {
+		test = {
+			sides = networks.AllSides, -- connection sides for cables
+			ntype = "con",
+		},
+	},
 	paramtype = "light",
 	light_source = minetest.LIGHT_MAX,	
 	paramtype2 = "facedir",
@@ -326,13 +329,18 @@ minetest.register_node("networks:storage", {
 	tiles = {"networks_sto.png"},
 	on_timer = function(pos, elapsed)
 		local mem = tubelib2.get_mem(pos)
-		mem.load = networks.get_storage_load(pos, Cable)
-		M(pos):set_string("infotext", "load = "..math.floor(mem.load * 100))
+		local val = networks.get_storage_load(pos, Cable)
+		if val then
+			mem.load = val * STORAGE_CAPA
+		end
+		local percent = (mem.load or 0) / STORAGE_CAPA * 100
+		M(pos):set_string("infotext", "load = "..round(percent))
 		return true
 	end,
 	after_place_node = function(pos)
 		Cable:after_place_node(pos)
 		minetest.get_node_timer(pos):start(CYCLE_TIME)
+		tubelib2.init_mem(pos)
 	end,
 	after_dig_node = function(pos, oldnode)
 		Cable:after_dig_node(pos)
@@ -346,7 +354,7 @@ minetest.register_node("networks:storage", {
 		return mem.load or 0, STORAGE_CAPA
 	end,
 	networks = {
-		ele = {
+		test = {
 		  sides = networks.AllSides,
 		  ntype = "sto",
 		},
@@ -356,3 +364,109 @@ minetest.register_node("networks:storage", {
 	is_ground_content = false,
 	sounds = default.node_sound_wood_defaults(),
 })
+
+-------------------------------------------------------------------------------
+-- Switch/valve
+-------------------------------------------------------------------------------
+local Param2ToDir = {
+	[0] = 6,
+	[1] = 5,
+	[2] = 2,
+	[3] = 4,
+	[4] = 1,
+	[5] = 3,
+}
+
+local function is_switchbox(pos)
+	return techage.get_node_lvm(pos).name == "techage:powerswitch_box" or 
+			M(pos):get_string("techage_hidden_nodename") == "techage:powerswitch_box"
+end
+
+local function switch_on(pos, node, clicker, name)
+	if clicker and minetest.is_protected(pos, clicker:get_player_name()) then
+		return
+	end
+	node.name = name
+	minetest.swap_node(pos, node)
+	minetest.sound_play("techage_button", {
+			pos = pos,
+			gain = 0.5,
+			max_hear_distance = 5,
+		})
+	local dir = Param2ToDir[node.param2]
+	local pos2 = tubelib2.get_pos(pos, dir)
+	
+	if is_switchbox(pos2) then
+		if M(pos2):get_int("tl2_param2_copy") == 0 then
+			M(pos2):set_int("tl2_param2", techage.get_node_lvm(pos2).param2)
+		else
+			M(pos2):set_int("tl2_param2", M(pos2):get_int("tl2_param2_copy"))
+		end
+		Cable:after_place_tube(pos2, clicker)
+	end
+end
+
+local function switch_off(pos, node, clicker, name)
+	if clicker and minetest.is_protected(pos, clicker:get_player_name()) then
+		return
+	end
+	node.name = name
+	minetest.swap_node(pos, node)
+	minetest.get_node_timer(pos):stop()
+	minetest.sound_play("techage_button", {
+			pos = pos,
+			gain = 0.5,
+			max_hear_distance = 5,
+		})
+	local dir = Param2ToDir[node.param2]
+	local pos2 = tubelib2.get_pos(pos, dir)
+	
+	if is_switchbox(pos2) then
+		local node2 = techage.get_node_lvm(pos2)
+		node2.param2 = M(pos2):get_int("tl2_param2")
+		M(pos2):set_int("tl2_param2_copy", M(pos2):get_int("tl2_param2"))
+		M(pos2):set_int("tl2_param2", 0)
+		Cable:after_dig_tube(pos2, node2)
+	end
+end
+
+
+--minetest.register_node("techage:powerswitch", {
+--	description = S("TA Power Switch"),
+--	inventory_image = "techage_appl_switch_inv.png",
+--	tiles = {
+--		'techage_appl_switch_off.png',
+--	},
+
+--	drawtype = "nodebox",
+--	node_box = {
+--		type = "fixed",
+--		fixed = {
+--			{ -1/4, -8/16, -1/4,  1/4, -7/16, 1/4},
+--			{ -1/6, -12/16, -1/6,  1/6, -8/16, 1/6},
+--		},
+--	},
+	
+--	after_place_node = function(pos, placer)
+--		local meta = M(pos)
+--		local number = techage.add_node(pos, "techage:powerswitch")
+--		meta:set_string("node_number", number)
+--		meta:set_string("owner", placer:get_player_name())
+--		meta:set_string("infotext", S("TA Power Switch").." "..number)
+--		local node = minetest.get_node(pos)
+--		switch_on(pos, node, placer, "techage:powerswitch_on")
+--	end,
+
+--	on_rightclick = function(pos, node, clicker)
+--		switch_on(pos, node, clicker, "techage:powerswitch_on")
+--	end,
+
+--	on_rotate = screwdriver.disallow,
+--	paramtype = "light",
+--	use_texture_alpha = techage.CLIP,
+--	sunlight_propagates = true,
+--	paramtype2 = "wallmounted",
+--	groups = {choppy=2, cracky=2, crumbly=2},
+--	is_ground_content = false,
+--	sounds = default.node_sound_wood_defaults(),
+--})
