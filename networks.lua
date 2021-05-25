@@ -314,7 +314,7 @@ minetest.after(60, remove_outdated_networks)
 -- Maintain netID
 -------------------------------------------------------------------------------
 
--- Return node netID and netwotk if available.
+-- Return node netID and network if available.
 -- The function updates the network TTL, thus keeping the network alive.
 local function get_netID_and_network(pos, tlib2, outdir)
 	local hash = minetest.hash_node_position(pos)

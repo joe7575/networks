@@ -76,3 +76,7 @@ Required: tubelib2
 - Add switch
 - Add tool and hide/open feature
 - bug fixes and improvements
+
+**2021-05-25  V0.03**
+- Add function `networks.get_power_data`
+- bug fixes and improvements

@@ -13,7 +13,7 @@
 networks = {}
 
 -- Version for compatibility checks, see readme.md/history
-networks.version = 0.02
+networks.version = 0.03
 
 if minetest.global_exists("tubelib2") and tubelib2.version < 2.1 then
 	minetest.log("error", "[networks] Networks requires tubelib2 version 2.1 or newer!")

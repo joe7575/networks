@@ -377,26 +377,28 @@ minetest.register_node("networks:storage", {
 	tiles = {"networks_sto.png"},
 	on_timer = function(pos, elapsed)
 		local mem = tubelib2.get_mem(pos)
-		local val = networks.get_storage_load(pos, Cable)
+		local val = networks.get_storage_level(pos, Cable)
 		if val then
-			mem.load = val * STORAGE_CAPA
+			mem.level = val * STORAGE_CAPA
 		end
-		local percent = (mem.load or 0) / STORAGE_CAPA * 100
-		M(pos):set_string("infotext", "load = "..round(percent))
+		local percent = (mem.level or 0) / STORAGE_CAPA * 100
+		M(pos):set_string("infotext", "level = "..round(percent))
 		return true
 	end,
 	after_place_node = function(pos)
 		Cable:after_place_node(pos)
 		minetest.get_node_timer(pos):start(CYCLE_TIME)
 		tubelib2.init_mem(pos)
+		networks.reinit_storage(pos, Cable)
 	end,
 	after_dig_node = function(pos, oldnode)
 		Cable:after_dig_node(pos)
 		tubelib2.del_mem(pos)
+		networks.reinit_storage(pos, Cable)
 	end,
-	get_storage_load = function(pos)
+	get_storage_level = function(pos)
 		local mem = tubelib2.get_mem(pos)
-		return mem.load or 0, STORAGE_CAPA
+		return mem.level or 0, STORAGE_CAPA
 	end,
 	networks = {
 		test = {
@@ -539,3 +541,24 @@ minetest.register_node("networks:switch_off", {
 	sounds = default.node_sound_defaults(),
 })
 
+-------------------------------------------------------------------------------
+-- Test Commands
+-------------------------------------------------------------------------------
+minetest.register_chatcommand("power_data", {
+    func = function(name)
+		local player = minetest.get_player_by_name(name)
+		local pos = player:get_pos()
+		pos.y = pos.y - 0.5
+		pos = vector.round(pos)
+		local data = networks.get_storage_data(pos, Cable)
+		if data then
+			local s = string.format("generated = %u/%u, consumed = %u, storage level = %u/%u (min = %u, max = %u)",
+				round(data.provided), data.available, round(data.consumed), 
+				round(data.curr_level), round(data.max_capa), 
+				round(data.min_level), round(data.max_level))
+			return true, s
+		end
+		return false, "No valid node position!"
+		
+    end
+})
