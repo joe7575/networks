@@ -30,7 +30,7 @@ end
 -------------------------------------------------------------------------------
 local Cable = tubelib2.Tube:new({
 	dirs_to_check = {1,2,3,4,5,6},
-	max_tube_length = 20, 
+	max_tube_length = 100, 
 	tube_type = "test",
 	primary_node_names = {"networks:cableS", "networks:cableA", "networks:switch_on"}, 
 	secondary_node_names = {
@@ -86,7 +86,7 @@ if HIDDEN then
 else
 	-- use own global callback
 	Cable:register_on_tube_update2(function(pos, outdir, tlib2, node)
-		networks.update_network(pos, outdir, tlib2)
+		networks.on_update_power_network(pos, outdir, tlib2)
 	end)
 end	
 
@@ -177,11 +177,11 @@ networks.register_junction("networks:junction", size, Boxes, Cable, {
 		minetest.swap_node(pos, {name = name, param2 = 0})
 		Cable:after_place_node(pos)
 	end,
-	-- junctions need own 'tubelib2_on_update2', cause they provide 0 for outdir!
+	-- junction needs own 'tubelib2_on_update2', cause it provides 0 for outdir!
 	tubelib2_on_update2 = function(pos, outdir, tlib2, node)
 		local name = "networks:junction"..networks.junction_type(pos, Cable)
 		minetest.swap_node(pos, {name = name, param2 = 0})
-		networks.update_network(pos, 0, tlib2)
+		networks.on_update_power_network(pos, 0, tlib2)
 	end,
 	after_dig_node = function(pos, oldnode, oldmetadata, digger)
 		Cable:after_dig_node(pos)
@@ -244,6 +244,15 @@ minetest.register_node("networks:generator", {
 			mem.running = true
 			M(pos):set_string("infotext", "providing "..round(mem.provided))
 			minetest.get_node_timer(pos):start(CYCLE_TIME)
+		end
+		networks.start_storage_calc(pos, Cable)
+	end,
+	get_generator_data = function(pos)
+		local mem = tubelib2.get_mem(pos)
+		if mem.running then
+			return {level = (mem.load or 0) / GEN_MAX, perf = GEN_MAX}
+		else
+			return {level = 0, perf = 0}
 		end
 	end,
 	networks = {
@@ -377,28 +386,45 @@ minetest.register_node("networks:storage", {
 	tiles = {"networks_sto.png"},
 	on_timer = function(pos, elapsed)
 		local mem = tubelib2.get_mem(pos)
-		local val = networks.get_storage_level(pos, Cable)
-		if val then
-			mem.level = val * STORAGE_CAPA
+		local data = networks.get_storage_level(pos, Cable)
+		if data then
+			mem.load = data.level * STORAGE_CAPA
+			local percent = data.level * 100
+			M(pos):set_string("infotext", "level = "..round(percent)..", charging = "..data.charging)
 		end
-		local percent = (mem.level or 0) / STORAGE_CAPA * 100
-		M(pos):set_string("infotext", "level = "..round(percent))
 		return true
 	end,
 	after_place_node = function(pos)
 		Cable:after_place_node(pos)
-		minetest.get_node_timer(pos):start(CYCLE_TIME)
 		tubelib2.init_mem(pos)
-		networks.reinit_storage(pos, Cable)
+		M(pos):set_string("infotext", "off")
 	end,
 	after_dig_node = function(pos, oldnode)
 		Cable:after_dig_node(pos)
 		tubelib2.del_mem(pos)
-		networks.reinit_storage(pos, Cable)
 	end,
-	get_storage_level = function(pos)
+	on_rightclick = function(pos, node, clicker)
 		local mem = tubelib2.get_mem(pos)
-		return mem.level or 0, STORAGE_CAPA
+		if mem.running then
+			mem.running = false
+			M(pos):set_string("infotext", "off")
+			minetest.get_node_timer(pos):stop()
+		else
+			mem.provided = mem.provided or 0
+			mem.running = true
+			local percent = (mem.load or 0) / STORAGE_CAPA * 100
+			M(pos):set_string("infotext", "level = "..round(percent))
+			minetest.get_node_timer(pos):start(CYCLE_TIME)
+		end
+		networks.start_storage_calc(pos, Cable)
+	end,
+	get_storage_data = function(pos)
+		local mem = tubelib2.get_mem(pos)
+		if mem.running then
+			return {level = (mem.load or 0) / STORAGE_CAPA, capa = STORAGE_CAPA}
+		else
+			return {level = 0, capa = 0}
+		end
 	end,
 	networks = {
 		test = {
@@ -436,7 +462,7 @@ local function replace_node(itemstack, placer, pointed_thing)
 				gain = 1,
 				max_hear_distance = 5})
 		elseif placer and placer.get_player_name then
-			minetest.chat_send_player(placer:get_player_name(), "Invalid fill material!")
+			minetest.chat_send_player(placer:get_player_name(), "Invalid fill material in inventory slot 1!")
 		end
 	end
 end
@@ -528,6 +554,12 @@ minetest.register_node("networks:switch_off", {
 	after_dig_node = function(pos, oldnode, oldmetadata, digger)
 		Cable:after_dig_node(pos)
 	end,
+	networks = {
+		test = {
+			sides = {}, -- no connection sides
+			ntype = "con",
+		},
+	},
 	paramtype2 = "facedir", -- important!
 	drawtype = "nodebox",
 	node_box = node_box,
@@ -550,12 +582,13 @@ minetest.register_chatcommand("power_data", {
 		local pos = player:get_pos()
 		pos.y = pos.y - 0.5
 		pos = vector.round(pos)
-		local data = networks.get_storage_data(pos, Cable)
+		local data = networks.get_power_data(pos, Cable)
 		if data then
-			local s = string.format("generated = %u/%u, consumed = %u, storage level = %u/%u (min = %u, max = %u)",
-				round(data.provided), data.available, round(data.consumed), 
-				round(data.curr_level), round(data.max_capa), 
-				round(data.min_level), round(data.max_level))
+			local s = string.format("Netw %u: generated = %u/%u, consumed = %u, storage load = %u/%u (min = %u, max = %u)",
+				data.netw_num, round(data.provided), 
+				data.available, round(data.consumed), 
+				round(data.curr_load), round(data.max_capa), 
+				round(data.min_load), round(data.max_load))
 			return true, s
 		end
 		return false, "No valid node position!"

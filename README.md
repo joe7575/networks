@@ -15,7 +15,7 @@ Power networks consists of following node types:
 - Consumers, nodes consuming power
 - Storage nodes, nodes storing power
 - Cables, to build power connections
-- Junctions, to build power networks
+- Junctions, to connect point to point connection to networks
 - Switches, to turn on/off network segments
 
 All storage nodes in a network form a storage system. Storage systems are
@@ -40,15 +40,15 @@ tbd.
 
 ### Test Nodes
 
-The file `test.lua` includes test nodes of each kind. It can be used to
-play with the features and to study the use of `networks`.
+The file `./test/test_power.lua` includes test nodes of each kind of power nodes.
+It can be used to play with the features and to study the use of `networks`.
 
 - [G] a generator, which provides 20 units of power every 2 s
 - [C] a consumer, which need 5 units of power every 2 s
-
-Both nodes can be turned on/off by right-clicking.
-
 - [S] a storage with 500 units capacity
+
+All three nodes can be turned on/off by right-clicking.
+
 - cable node for power transportation
 - junction node for power distribution
 - a power switch to turn on/off consumers
@@ -79,4 +79,7 @@ Required: tubelib2
 
 **2021-05-25  V0.03**
 - Add function `networks.get_power_data`
+- bug fixes and improvements
+
+**2021-05-29  V0.04**
 - bug fixes and improvements

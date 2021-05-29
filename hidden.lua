@@ -36,7 +36,6 @@ function networks.hidden_node(pos, netw_type)
 	if ndef and ndef.networks then
 		return ndef.networks[netw_type] or {} 
 	end
-	return {}
 end
 
 function networks.hidden_name(pos)
@@ -93,7 +92,10 @@ function networks.use_metadata(tlib2)
 	-- Needed for hidden nodes, cause they don't have a 'tubelib2_on_update2' callback
 	-- and is used for all kind of nodes without own 'tubelib2_on_update2'
 	tlib2:register_on_tube_update2(function(pos, outdir, tlib2, node)
-		networks.update_network(pos, outdir, tlib2)
+		if networks.is_junction(pos, node.name, tlib2) then
+			outdir = 0
+		end
+		networks.on_update_power_network(pos, outdir, tlib2)
 	end)
 end
 
