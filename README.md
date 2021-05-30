@@ -83,3 +83,6 @@ Required: tubelib2
 
 **2021-05-29  V0.04**
 - bug fixes and improvements
+
+**2021-05-30  V0.05**
+- Change power API

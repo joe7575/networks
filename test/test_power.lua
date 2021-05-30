@@ -25,6 +25,8 @@ local function round(val)
 	return math.floor(val + 0.5)
 end
 
+local power = networks.power
+
 -------------------------------------------------------------------------------
 -- Cable
 -------------------------------------------------------------------------------
@@ -33,10 +35,7 @@ local Cable = tubelib2.Tube:new({
 	max_tube_length = 100, 
 	tube_type = "test",
 	primary_node_names = {"networks:cableS", "networks:cableA", "networks:switch_on"}, 
-	secondary_node_names = {
-		"networks:switch_off",
-		"networks:generator", "networks:storage",
-		"networks:consumer", "networks:consumer_on"},
+	secondary_node_names = {},  -- Will be added via 'power.register_node'
 	after_place_tube = function(pos, param2, tube_type, num_tubes, tbl)
 		if networks.node_to_be_replaced(pos, param2, tube_type, num_tubes) then
 			local name = minetest.get_node(pos).name
@@ -83,12 +82,16 @@ if HIDDEN then
 		"default:mese",
 		"default:diamondblock",
 	})
-else
-	-- use own global callback
-	Cable:register_on_tube_update2(function(pos, outdir, tlib2, node)
-		networks.on_update_power_network(pos, outdir, tlib2)
-	end)
 end	
+
+-- Use global callback instead of node related functions
+Cable:register_on_tube_update2(function(pos, outdir, tlib2, node)
+	-- this check is needed for hidden junctions
+	if networks.is_junction(pos, node.name, tlib2) then
+		outdir = 0
+	end
+	power.update_network(pos, outdir, tlib2, node)
+end)
 
 minetest.register_node("networks:cableS", {
 	description = "Cable",
@@ -110,7 +113,7 @@ minetest.register_node("networks:cableS", {
 	after_dig_node = function(pos, oldnode, oldmetadata, digger)
 		Cable:after_dig_tube(pos, oldnode, oldmetadata)
 	end,
-	paramtype2 = "facedir", -- important!
+	paramtype2 = "facedir",
 	drawtype = "nodebox",
 	node_box = {
 		type = "fixed",
@@ -118,12 +121,12 @@ minetest.register_node("networks:cableS", {
 			{-3/16, -3/16, -4/8,  3/16, 3/16, 4/8},
 		},
 	},
-	on_rotate = screwdriver.disallow, -- important!
+	on_rotate = screwdriver.disallow,
 	paramtype = "light",
 	use_texture_alpha = "clip",
 	sunlight_propagates = true,
 	is_ground_content = false,
-	groups = {crumbly = 3, cracky = 3, snappy = 3, test_trowel = 1},
+	groups = {crumbly = 2, cracky = 2, snappy = 2, test_trowel = 1},
 	sounds = default.node_sound_defaults(),
 })
 
@@ -140,7 +143,7 @@ minetest.register_node("networks:cableA", {
 	after_dig_node = function(pos, oldnode, oldmetadata, digger)
 		Cable:after_dig_tube(pos, oldnode, oldmetadata)
 	end,
-	paramtype2 = "facedir", -- important!
+	paramtype2 = "facedir",
 	drawtype = "nodebox",
 	node_box = {
 		type = "fixed",
@@ -149,12 +152,12 @@ minetest.register_node("networks:cableA", {
 			{-3/16, -3/16, -4/8,  3/16, 3/16, -3/16},
 		},
 	},
-	on_rotate = screwdriver.disallow, -- important!
+	on_rotate = screwdriver.disallow,
 	paramtype = "light",
 	use_texture_alpha = "clip",
 	sunlight_propagates = true,
 	is_ground_content = false,
-	groups = {crumbly = 3, cracky = 3, snappy = 3, test_trowel = 1, not_in_creative_inventory=1},
+	groups = {crumbly = 2, cracky = 2, snappy = 2, test_trowel = 1, not_in_creative_inventory=1},
 	sounds = default.node_sound_defaults(),
 	drop = "networks:cableS",
 })
@@ -169,7 +172,7 @@ local Boxes = {
 	{{-size, -size, -size, size,  0.5,  size}}, -- y+
 }
 
-networks.register_junction("networks:junction", size, Boxes, Cable, {
+local names = networks.register_junction("networks:junction", size, Boxes, Cable, {
 	description = "Junction",
 	tiles = {"networks_junction.png"},
 	after_place_node = function(pos, placer, itemstack, pointed_thing)
@@ -177,28 +180,22 @@ networks.register_junction("networks:junction", size, Boxes, Cable, {
 		minetest.swap_node(pos, {name = name, param2 = 0})
 		Cable:after_place_node(pos)
 	end,
-	-- junction needs own 'tubelib2_on_update2', cause it provides 0 for outdir!
+	-- junction needs own 'tubelib2_on_update2' to be able to call networks.junction_type
 	tubelib2_on_update2 = function(pos, outdir, tlib2, node)
-		local name = "networks:junction"..networks.junction_type(pos, Cable)
+		local name = "networks:junction" .. networks.junction_type(pos, Cable)
 		minetest.swap_node(pos, {name = name, param2 = 0})
-		networks.on_update_power_network(pos, 0, tlib2)
+		power.update_network(pos, 0, tlib2, node)
 	end,
 	after_dig_node = function(pos, oldnode, oldmetadata, digger)
 		Cable:after_dig_node(pos)
 	end,
-	networks = {
-		test = {
-			sides = networks.AllSides, -- connection sides for cables
-			ntype = "junc",
-		},
-	},
-	paramtype = "light",
 	use_texture_alpha = "clip",
-	sunlight_propagates = true,
 	is_ground_content = false,
-	groups = {crumbly = 3, cracky = 3, snappy = 3, test_trowel = 1},
+	groups = {crumbly = 2, cracky = 2, snappy = 2, test_trowel = 1},
 	sounds = default.node_sound_defaults(),
 }, 63)
+
+power.register_node(names, Cable, "junc")
 
 -------------------------------------------------------------------------------
 -- Generator
@@ -214,14 +211,14 @@ minetest.register_node("networks:generator", {
 		'networks_gen.png',
 		'networks_conn.png',
 	},
-	after_place_node = function(pos, placer)
+	after_place_node = function(pos)
 		local outdir = networks.side_to_outdir(pos, "F")
 		M(pos):set_int("outdir", outdir)
 		Cable:after_place_node(pos, {outdir})		
 		M(pos):set_string("infotext", "off")
 		tubelib2.init_mem(pos)
 	end,
-	after_dig_node = function(pos, oldnode, oldmetadata, digger)
+	after_dig_node = function(pos, oldnode, oldmetadata)
 		local outdir = tonumber(oldmetadata.fields.outdir or 0)
 		Cable:after_dig_node(pos, {outdir})
 		tubelib2.del_mem(pos)
@@ -229,7 +226,7 @@ minetest.register_node("networks:generator", {
 	on_timer = function(pos, elapsed)
 		local outdir = M(pos):get_int("outdir")
 		local mem = tubelib2.get_mem(pos)
-		mem.provided = networks.provide_power(pos, Cable, outdir, GEN_MAX)
+		mem.provided = power.provide_power(pos, Cable, outdir, GEN_MAX)
 		M(pos):set_string("infotext", "providing "..round(mem.provided))
 		return true
 	end,
@@ -245,9 +242,9 @@ minetest.register_node("networks:generator", {
 			M(pos):set_string("infotext", "providing "..round(mem.provided))
 			minetest.get_node_timer(pos):start(CYCLE_TIME)
 		end
-		networks.start_storage_calc(pos, Cable)
+		power.start_storage_calc(pos, Cable)
 	end,
-	get_generator_data = function(pos)
+	get_generator_data = function(pos, tlib2)
 		local mem = tubelib2.get_mem(pos)
 		if mem.running then
 			return {level = (mem.load or 0) / GEN_MAX, perf = GEN_MAX}
@@ -255,20 +252,85 @@ minetest.register_node("networks:generator", {
 			return {level = 0, perf = 0}
 		end
 	end,
-	networks = {
-		test = {
-		  sides = networks.AllSides,
-		  ntype = "gen",
-		},
-	},
-	paramtype2 = "facedir", -- important!
-	on_rotate = screwdriver.disallow, -- important!
-	paramtype = "light",
-	sunlight_propagates = true,
+	paramtype2 = "facedir",
+	on_rotate = screwdriver.disallow,
 	is_ground_content = false,
-	groups = {crumbly = 3, cracky = 3, snappy = 3},
-	sounds = default.node_sound_glass_defaults(),
+	groups = {crumbly = 2, cracky = 2, snappy = 2},
+	sounds = default.node_sound_defaults(),
 })
+
+-- Generators have to provide one output side
+power.register_node({"networks:generator"}, Cable, "gen", {"F"})
+
+-------------------------------------------------------------------------------
+-- Storage
+-------------------------------------------------------------------------------
+minetest.register_node("networks:storage", {
+	description = "Storage",
+	tiles = {
+		-- up, down, right, left, back, front
+		"networks_sto.png",
+		"networks_sto.png",
+		"networks_sto.png",
+		"networks_sto.png",
+		"networks_sto.png",
+		'networks_conn.png',
+	},
+	after_place_node = function(pos)
+		local outdir = networks.side_to_outdir(pos, "F")
+		M(pos):set_int("outdir", outdir)
+		Cable:after_place_node(pos, {outdir})		
+		tubelib2.init_mem(pos)
+		M(pos):set_string("infotext", "off")
+	end,
+	after_dig_node = function(pos, oldnode, oldmetadata)
+		local outdir = tonumber(oldmetadata.fields.outdir or 0)
+		Cable:after_dig_node(pos, {outdir})
+		tubelib2.del_mem(pos)
+	end,
+	on_timer = function(pos, elapsed)
+		local mem = tubelib2.get_mem(pos)
+		local outdir = M(pos):get_int("outdir")
+		local data = power.get_storage_data(pos, Cable, outdir)
+		if data then
+			mem.load = data.level * STORAGE_CAPA
+			local percent = data.level * 100
+			M(pos):set_string("infotext", "level = "..round(percent)..", charging = "..data.charging)
+		end
+		return true
+	end,
+	on_rightclick = function(pos, node, clicker)
+		local mem = tubelib2.get_mem(pos)
+		if mem.running then
+			mem.running = false
+			M(pos):set_string("infotext", "off")
+			minetest.get_node_timer(pos):stop()
+		else
+			mem.provided = mem.provided or 0
+			mem.running = true
+			local percent = (mem.load or 0) / STORAGE_CAPA * 100
+			M(pos):set_string("infotext", "level = "..round(percent))
+			minetest.get_node_timer(pos):start(CYCLE_TIME)
+		end
+		power.start_storage_calc(pos, Cable)
+	end,
+	get_storage_data = function(pos, tlib2)
+		local mem = tubelib2.get_mem(pos)
+		if mem.running then
+			return {level = (mem.load or 0) / STORAGE_CAPA, capa = STORAGE_CAPA}
+		else
+			return {level = 0, capa = 0}
+		end
+	end,
+	paramtype2 = "facedir",
+	on_rotate = screwdriver.disallow,
+	is_ground_content = false,
+	groups = {crumbly = 2, cracky = 2, snappy = 2},
+	sounds = default.node_sound_defaults(),
+})
+
+-- Storage nodes have to provide one input/output side
+power.register_node({"networks:storage"}, Cable, "sto", {"F"})
 
 -------------------------------------------------------------------------------
 -- Consumer
@@ -300,7 +362,7 @@ end
 
 local function on_rightclick(pos, node, clicker)
 	local mem = tubelib2.get_mem(pos)
-	if not mem.running and networks.power_available(pos, Cable) then
+	if not mem.running and power.power_available(pos, Cable) then
 		turn_on(pos, Cable)
 	else
 		turn_off(pos, Cable)
@@ -323,7 +385,7 @@ minetest.register_node("networks:consumer", {
 	tiles = {'networks_con.png^[colorize:#000000:50'},
 	
 	on_timer = function(pos, elapsed)
-		local consumed = networks.consume_power(pos, Cable, nil, CON_MAX)
+		local consumed = power.consume_power(pos, Cable, CON_MAX)
 		if consumed == CON_MAX then
 			swap_node(pos, "networks:consumer_on")
 			M(pos):set_string("infotext", "on")
@@ -333,18 +395,10 @@ minetest.register_node("networks:consumer", {
 	on_rightclick = on_rightclick,
 	after_place_node = after_place_node,
 	after_dig_node = after_dig_node,
-	networks = {
-		test = {
-			sides = networks.AllSides, -- connection sides for cables
-			ntype = "con",
-		},
-	},
-	paramtype = "light",
-	light_source = 0,	
 	paramtype2 = "facedir",
 	groups = {choppy = 2, cracky = 2, crumbly = 2},
 	is_ground_content = false,
-	sounds = default.node_sound_wood_defaults(),
+	sounds = default.node_sound_defaults(),
 })
 
 minetest.register_node("networks:consumer_on", {
@@ -352,7 +406,7 @@ minetest.register_node("networks:consumer_on", {
 	tiles = {'networks_con.png'},
 
 	on_timer = function(pos, elapsed)
-		local consumed = networks.consume_power(pos, Cable, nil, CON_MAX)
+		local consumed = power.consume_power(pos, Cable, CON_MAX)
 		if consumed < CON_MAX then
 			swap_node(pos, "networks:consumer")
 			M(pos):set_string("infotext", "no power")
@@ -362,12 +416,6 @@ minetest.register_node("networks:consumer_on", {
 	on_rightclick = on_rightclick,
 	after_place_node = after_place_node,
 	after_dig_node = after_dig_node,
-	networks = {
-		test = {
-			sides = networks.AllSides, -- connection sides for cables
-			ntype = "con",
-		},
-	},
 	paramtype = "light",
 	light_source = minetest.LIGHT_MAX,	
 	paramtype2 = "facedir",
@@ -375,109 +423,11 @@ minetest.register_node("networks:consumer_on", {
 	drop = "",
 	groups = {not_in_creative_inventory = 1},
 	is_ground_content = false,
-	sounds = default.node_sound_wood_defaults(),
+	sounds = default.node_sound_defaults(),
 })
 
--------------------------------------------------------------------------------
--- Storage
--------------------------------------------------------------------------------
-minetest.register_node("networks:storage", {
-	description = "Storage",
-	tiles = {"networks_sto.png"},
-	on_timer = function(pos, elapsed)
-		local mem = tubelib2.get_mem(pos)
-		local data = networks.get_storage_level(pos, Cable)
-		if data then
-			mem.load = data.level * STORAGE_CAPA
-			local percent = data.level * 100
-			M(pos):set_string("infotext", "level = "..round(percent)..", charging = "..data.charging)
-		end
-		return true
-	end,
-	after_place_node = function(pos)
-		Cable:after_place_node(pos)
-		tubelib2.init_mem(pos)
-		M(pos):set_string("infotext", "off")
-	end,
-	after_dig_node = function(pos, oldnode)
-		Cable:after_dig_node(pos)
-		tubelib2.del_mem(pos)
-	end,
-	on_rightclick = function(pos, node, clicker)
-		local mem = tubelib2.get_mem(pos)
-		if mem.running then
-			mem.running = false
-			M(pos):set_string("infotext", "off")
-			minetest.get_node_timer(pos):stop()
-		else
-			mem.provided = mem.provided or 0
-			mem.running = true
-			local percent = (mem.load or 0) / STORAGE_CAPA * 100
-			M(pos):set_string("infotext", "level = "..round(percent))
-			minetest.get_node_timer(pos):start(CYCLE_TIME)
-		end
-		networks.start_storage_calc(pos, Cable)
-	end,
-	get_storage_data = function(pos)
-		local mem = tubelib2.get_mem(pos)
-		if mem.running then
-			return {level = (mem.load or 0) / STORAGE_CAPA, capa = STORAGE_CAPA}
-		else
-			return {level = 0, capa = 0}
-		end
-	end,
-	networks = {
-		test = {
-		  sides = networks.AllSides,
-		  ntype = "sto",
-		},
-	},
-	paramtype2 = "facedir",
-	groups = {choppy = 2, cracky = 2, crumbly = 2},
-	is_ground_content = false,
-	sounds = default.node_sound_wood_defaults(),
-})
-
--------------------------------------------------------------------------------
--- Hide/open tool
--------------------------------------------------------------------------------
--- Hide or open a node
-local function replace_node(itemstack, placer, pointed_thing)
-	if pointed_thing.type == "node" then
-		local pos = pointed_thing.under
-		local name = placer:get_player_name()
-		if minetest.is_protected(pos, name) then
-			return
-		end
-		local node = minetest.get_node(pos)
-		local res = false
-		if minetest.get_item_group(node.name, "test_trowel") == 1 then
-			res = networks.hide_node(pos, node, placer)
-		elseif networks.hidden_name(pos) then
-			res = networks.open_node(pos, node, placer)
-		end
-		if res then
-			minetest.sound_play("default_dig_snappy", {
-				pos = pos, 
-				gain = 1,
-				max_hear_distance = 5})
-		elseif placer and placer.get_player_name then
-			minetest.chat_send_player(placer:get_player_name(), "Invalid fill material in inventory slot 1!")
-		end
-	end
-end
-
-minetest.register_tool("networks:tool", {
-	description = "Hide Tool\n(Fill material to the right of the tool)",
-	inventory_image = "networks_tool.png",
-	wield_image = "networks_tool.png",
-	use_texture_alpha = "clip",
-	groups = {cracky=1},
-	on_use = replace_node,
-	on_place = replace_node,
-	node_placement_prediction = "",
-	stack_max = 1,
-})
+-- Consumer can provide dedicated input sides, otherwise all sides are used
+power.register_node({"networks:consumer", "networks:consumer_on"}, Cable, "con")
 
 -------------------------------------------------------------------------------
 -- Switch/valve
@@ -489,10 +439,12 @@ local node_box = {
 	},
 }
 
--- The on-switch is a primary node like cables
+-- The on-switch is a "primary node" like cables
 minetest.register_node("networks:switch_on", {
 	description = "Switch",
+	paramtype = "light",
 	drawtype = "nodebox",
+	node_box = node_box,
 	tiles = {
 		"networks_switch_on.png^[transformR90",
 		"networks_switch_on.png^[transformR90",
@@ -509,7 +461,7 @@ minetest.register_node("networks:switch_on", {
 		return false
 	end,
 	on_rightclick = function(pos, node, clicker)
-		if networks.turn_switch_off(pos, Cable, "networks:switch_off", "networks:switch_on") then
+		if power.turn_switch_off(pos, Cable, "networks:switch_off", "networks:switch_on") then
 			minetest.sound_play("doors_glass_door_open", {
 				pos = pos, 
 				gain = 1,
@@ -519,22 +471,21 @@ minetest.register_node("networks:switch_on", {
 	after_dig_node = function(pos, oldnode, oldmetadata, digger)
 		Cable:after_dig_tube(pos, oldnode, oldmetadata)
 	end,
-	paramtype2 = "facedir", -- important!
-	drawtype = "nodebox",
-	node_box = node_box,
-	on_rotate = screwdriver.disallow, -- important!
-	paramtype = "light",
+	paramtype2 = "facedir",
+	on_rotate = screwdriver.disallow,
 	use_texture_alpha = "clip",
 	sunlight_propagates = true,
 	is_ground_content = false,
-	groups = {crumbly = 3, cracky = 3, snappy = 3, test_trowel = 1},
+	groups = {crumbly = 2, cracky = 2, snappy = 2, test_trowel = 1},
 	sounds = default.node_sound_defaults(),
 })
 
--- The off-switch is a secondary node
+-- The off-switch is a "secondary node"
 minetest.register_node("networks:switch_off", {
 	description = "Switch",
+	paramtype = "light",
 	drawtype = "nodebox",
+	node_box = node_box,
 	tiles = {
 		"networks_switch_off.png^[transformR90",
 		"networks_switch_off.png^[transformR90",
@@ -544,7 +495,7 @@ minetest.register_node("networks:switch_off", {
 		"networks_switch_hole.png",
 	},
 	on_rightclick = function(pos, node, clicker)
-		if networks.turn_switch_on(pos, Cable, "networks:switch_off", "networks:switch_on") then
+		if power.turn_switch_on(pos, Cable, "networks:switch_off", "networks:switch_on") then
 			minetest.sound_play("doors_glass_door_open", {
 				pos = pos, 
 				gain = 1,
@@ -554,23 +505,88 @@ minetest.register_node("networks:switch_off", {
 	after_dig_node = function(pos, oldnode, oldmetadata, digger)
 		Cable:after_dig_node(pos)
 	end,
-	networks = {
-		test = {
-			sides = {}, -- no connection sides
-			ntype = "con",
-		},
-	},
-	paramtype2 = "facedir", -- important!
-	drawtype = "nodebox",
-	node_box = node_box,
-	on_rotate = screwdriver.disallow, -- important!
-	paramtype = "light",
+	paramtype2 = "facedir",
+	on_rotate = screwdriver.disallow,
 	use_texture_alpha = "clip",
 	sunlight_propagates = true,
 	is_ground_content = false,
 	drop = "networks:switch_on",
-	groups = {crumbly = 3, cracky = 3, snappy = 3, test_trowel = 1, not_in_creative_inventory = 1},
+	groups = {crumbly = 2, cracky = 2, snappy = 2, test_trowel = 1, not_in_creative_inventory = 1},
 	sounds = default.node_sound_defaults(),
+})
+
+power.register_node({"networks:switch_off"}, Cable, "con")
+
+-------------------------------------------------------------------------------
+-- Hide/open tool
+-------------------------------------------------------------------------------
+-- Hide or open a node
+local function replace_node(pos, placer)
+	local name = placer:get_player_name()
+	if minetest.is_protected(pos, name) then
+		return
+	end
+	local node = minetest.get_node(pos)
+	local res = false
+	if minetest.get_item_group(node.name, "test_trowel") == 1 then
+		res = networks.hide_node(pos, node, placer)
+	elseif networks.hidden_name(pos) then
+		res = networks.open_node(pos, node, placer)
+	end
+	if res then
+		minetest.sound_play("default_dig_snappy", {
+			pos = pos, 
+			gain = 1,
+			max_hear_distance = 5})
+	elseif placer and placer.get_player_name then
+		minetest.chat_send_player(placer:get_player_name(), "Invalid fill material in inventory slot 1!")
+	end
+end
+
+-- debug print of node rleated data
+local function debug_print(pos)
+	local num = 0
+	local s = ""
+	local outdir = M(pos):get_int("outdir")
+	local netID = networks.get_netID(pos, Cable, outdir)
+	if netID then
+		num = networks.netw_num(netID)
+		local network = networks.get_network("test", netID) or {}
+		s = networks.network_nodes(netID, network)
+	end
+	local node = minetest.get_node(pos)
+	local ndef = minetest.registered_nodes[node.name]
+	local mem = tubelib2.get_mem(pos)
+	local metadata = M(pos):to_table()
+	
+	print(" ################## Network " .. num .. " #######################")
+	print("networks = " .. dump(ndef.networks))
+	print("mem = " .. dump(mem))
+	print("metadata = " .. dump(metadata))
+	print(s)
+end
+
+local function action(itemstack, placer, pointed_thing)
+	if pointed_thing.type == "node" then
+		local pos = pointed_thing.under
+		if placer:get_player_control().sneak then
+			debug_print(pos)
+		else
+			replace_node(pos, placer)
+		end
+	end
+end
+
+minetest.register_tool("networks:tool", {
+	description = "Hide Tool\n(Fill material to the right of the tool)",
+	inventory_image = "networks_tool.png",
+	wield_image = "networks_tool.png",
+	use_texture_alpha = "clip",
+	groups = {cracky=1},
+	on_use = action,
+	on_place = action,
+	node_placement_prediction = "",
+	stack_max = 1,
 })
 
 -------------------------------------------------------------------------------
@@ -582,7 +598,7 @@ minetest.register_chatcommand("power_data", {
 		local pos = player:get_pos()
 		pos.y = pos.y - 0.5
 		pos = vector.round(pos)
-		local data = networks.get_power_data(pos, Cable)
+		local data = power.get_network_data(pos, Cable)
 		if data then
 			local s = string.format("Netw %u: generated = %u/%u, consumed = %u, storage load = %u/%u (min = %u, max = %u)",
 				data.netw_num, round(data.provided), 

@@ -53,14 +53,13 @@ function networks.register_junction(name, size, boxes, tlib2, node, index)
 			ndef.groups.not_in_creative_inventory = 1
 		end
 		ndef.drawtype = "nodebox"
+		ndef.paramtype = "light"
+		ndef.sunlight_propagates = true
 		ndef.node_box = get_node_box(idx, size, boxes)
 		ndef.paramtype2 = "facedir"
 		ndef.on_rotate = screwdriver.disallow
 		ndef.drop = name..(index or "0")
 		minetest.register_node(name..idx, ndef)
-		tlib2:add_secondary_node_names({name..idx})
-		-- for the case that 'tlib2.force_to_use_tubes' is set
-		tlib2:add_special_node_names({name..idx}) 
 		names[#names + 1] = name..idx
 	end
 	return names
