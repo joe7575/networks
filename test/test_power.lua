@@ -33,7 +33,7 @@ local power = networks.power
 local Cable = tubelib2.Tube:new({
 	dirs_to_check = {1,2,3,4,5,6},
 	max_tube_length = 100, 
-	tube_type = "test",
+	tube_type = "pwr",
 	primary_node_names = {"networks:cableS", "networks:cableA", "networks:switch_on"}, 
 	secondary_node_names = {},  -- Will be added via 'power.register_node'
 	after_place_tube = function(pos, param2, tube_type, num_tubes, tbl)
@@ -86,10 +86,6 @@ end
 
 -- Use global callback instead of node related functions
 Cable:register_on_tube_update2(function(pos, outdir, tlib2, node)
-	-- this check is needed for hidden junctions
-	if networks.is_junction(pos, node.name, tlib2) then
-		outdir = 0
-	end
 	power.update_network(pos, outdir, tlib2, node)
 end)
 
@@ -195,7 +191,7 @@ local names = networks.register_junction("networks:junction", size, Boxes, Cable
 	sounds = default.node_sound_defaults(),
 }, 63)
 
-power.register_node(names, Cable, "junc")
+power.register_nodes(names, Cable, "junc")
 
 -------------------------------------------------------------------------------
 -- Generator
@@ -242,7 +238,8 @@ minetest.register_node("networks:generator", {
 			M(pos):set_string("infotext", "providing "..round(mem.provided))
 			minetest.get_node_timer(pos):start(CYCLE_TIME)
 		end
-		power.start_storage_calc(pos, Cable)
+		local outdir = M(pos):get_int("outdir")
+		power.start_storage_calc(pos, Cable, outdir)
 	end,
 	get_generator_data = function(pos, tlib2)
 		local mem = tubelib2.get_mem(pos)
@@ -260,7 +257,7 @@ minetest.register_node("networks:generator", {
 })
 
 -- Generators have to provide one output side
-power.register_node({"networks:generator"}, Cable, "gen", {"F"})
+power.register_nodes({"networks:generator"}, Cable, "gen", {"F"})
 
 -------------------------------------------------------------------------------
 -- Storage
@@ -312,7 +309,8 @@ minetest.register_node("networks:storage", {
 			M(pos):set_string("infotext", "level = "..round(percent))
 			minetest.get_node_timer(pos):start(CYCLE_TIME)
 		end
-		power.start_storage_calc(pos, Cable)
+		local outdir = M(pos):get_int("outdir")
+		power.start_storage_calc(pos, Cable, outdir)
 	end,
 	get_storage_data = function(pos, tlib2)
 		local mem = tubelib2.get_mem(pos)
@@ -330,7 +328,7 @@ minetest.register_node("networks:storage", {
 })
 
 -- Storage nodes have to provide one input/output side
-power.register_node({"networks:storage"}, Cable, "sto", {"F"})
+power.register_nodes({"networks:storage"}, Cable, "sto", {"F"})
 
 -------------------------------------------------------------------------------
 -- Consumer
@@ -385,7 +383,7 @@ minetest.register_node("networks:consumer", {
 	tiles = {'networks_con.png^[colorize:#000000:50'},
 	
 	on_timer = function(pos, elapsed)
-		local consumed = power.consume_power(pos, Cable, CON_MAX)
+		local consumed = power.consume_power(pos, Cable, nil, CON_MAX)
 		if consumed == CON_MAX then
 			swap_node(pos, "networks:consumer_on")
 			M(pos):set_string("infotext", "on")
@@ -406,7 +404,7 @@ minetest.register_node("networks:consumer_on", {
 	tiles = {'networks_con.png'},
 
 	on_timer = function(pos, elapsed)
-		local consumed = power.consume_power(pos, Cable, CON_MAX)
+		local consumed = power.consume_power(pos, Cable, nil, CON_MAX)
 		if consumed < CON_MAX then
 			swap_node(pos, "networks:consumer")
 			M(pos):set_string("infotext", "no power")
@@ -427,7 +425,7 @@ minetest.register_node("networks:consumer_on", {
 })
 
 -- Consumer can provide dedicated input sides, otherwise all sides are used
-power.register_node({"networks:consumer", "networks:consumer_on"}, Cable, "con")
+power.register_nodes({"networks:consumer", "networks:consumer_on"}, Cable, "con")
 
 -------------------------------------------------------------------------------
 -- Switch/valve
@@ -480,7 +478,7 @@ minetest.register_node("networks:switch_on", {
 	sounds = default.node_sound_defaults(),
 })
 
--- The off-switch is a "secondary node"
+-- The off-switch is a "secondary node" without connection sides
 minetest.register_node("networks:switch_off", {
 	description = "Switch",
 	paramtype = "light",
@@ -515,7 +513,7 @@ minetest.register_node("networks:switch_off", {
 	sounds = default.node_sound_defaults(),
 })
 
-power.register_node({"networks:switch_off"}, Cable, "con")
+power.register_nodes({"networks:switch_off"}, Cable, "con", {})
 
 -------------------------------------------------------------------------------
 -- Hide/open tool
@@ -548,10 +546,10 @@ local function debug_print(pos)
 	local num = 0
 	local s = ""
 	local outdir = M(pos):get_int("outdir")
-	local netID = networks.get_netID(pos, Cable, outdir)
+	local netID = networks.determine_netID(pos, Cable, outdir)
 	if netID then
 		num = networks.netw_num(netID)
-		local network = networks.get_network("test", netID) or {}
+		local network = networks.get_network("pwr", netID) or {}
 		s = networks.network_nodes(netID, network)
 	end
 	local node = minetest.get_node(pos)
@@ -562,7 +560,7 @@ local function debug_print(pos)
 	print(" ################## Network " .. num .. " #######################")
 	print("networks = " .. dump(ndef.networks))
 	print("mem = " .. dump(mem))
-	print("metadata = " .. dump(metadata))
+	print("metadata = " .. dump(metadata.fields))
 	print(s)
 end
 

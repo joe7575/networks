@@ -27,6 +27,7 @@ local Power = {}  -- {netID = {curr_load, min_load, max_load, max_capa, consumed
 
 -- Determine load, capa and other power network data
 local function get_power_data(pos, tlib2, outdir)
+	assert(outdir)
 	local netw = networks.get_network_table(pos, tlib2, outdir)
 	local max_capa = 0
 	local curr_load = 0
@@ -57,13 +58,13 @@ local function get_power_data(pos, tlib2, outdir)
 end
 
 -------------------------------------------------------------------------------
--- Consumer/Generator/Storage
+-- For all types of nodes
 -------------------------------------------------------------------------------
 -- names: list of node names
 -- tlib2: tubelib2 instance
 -- node_type: one of "gen", "con", "sto", "junc"
 -- valid_sides: something like {"L", "R"} or nil
-function networks.power.register_node(names, tlib2, node_type, valid_sides)
+function networks.power.register_nodes(names, tlib2, node_type, valid_sides)
 	if node_type == "gen" or node_type == "sto" then
 		assert(#valid_sides == 1)
 	elseif node_type == "con" or node_type == "junc" then
@@ -87,7 +88,11 @@ end
 -- To be called for each power network change via
 -- tubelib2_on_update2 or register_on_tube_update2
 function networks.power.update_network(pos, outdir, tlib2, node)
-	local netID = networks.get_netID(pos, tlib2, outdir)
+	local ndef = networks.net_def(pos, tlib2.tube_type)
+	if ndef.ntype == "junc" then
+		outdir = 0
+	end
+	local netID = networks.get_netID(pos, outdir)
 	if netID then
 		Power[netID] = nil
 	end
@@ -98,33 +103,38 @@ end
 -- Consumer
 -------------------------------------------------------------------------------
 -- Function checks for a power grid, not for enough power
--- For consumers, outdir is optional
-function networks.power.power_available(pos, tlib2)
-	local netID = networks.get_netID(pos, tlib2)
-	if netID then
-		local pwr = Power[netID] or get_power_data(pos, tlib2)
-		return pwr.curr_load > 0
+-- Param outdir is optional
+function networks.power.power_available(pos, tlib2, outdir)
+	for _,outdir in ipairs(networks.get_outdirs(pos, tlib2, outdir)) do
+		local netID = networks.determine_netID(pos, tlib2, outdir)
+		if netID then
+			local pwr = Power[netID] or get_power_data(pos, tlib2, outdir)
+			return pwr.curr_load > 0
+		end
 	end
 end
 
--- For consumers, outdir is optional
-function networks.power.consume_power(pos, tlib2, amount)
-	local netID = networks.get_netID(pos, tlib2)
-	if netID then
-		local pwr = Power[netID] or get_power_data(pos, tlib2)
-		if pwr.curr_load >= amount then
-			pwr.curr_load = pwr.curr_load - amount
-			pwr.min_load = math.min(pwr.min_load, pwr.curr_load)
-			pwr.consumed = pwr.consumed + amount
-			Power[netID] = pwr
-			return amount
-		else
-			local consumed = pwr.curr_load
-			pwr.curr_load = 0
-			pwr.min_load = 0
-			pwr.consumed = pwr.consumed + consumed
-			Power[netID] = pwr
-			return consumed
+-- Param outdir is optional
+function networks.power.consume_power(pos, tlib2, outdir, amount)
+	assert(amount and amount > 0)
+	for _,outdir in ipairs(networks.get_outdirs(pos, tlib2, outdir)) do
+		local netID = networks.determine_netID(pos, tlib2, outdir)
+		if netID then
+			local pwr = Power[netID] or get_power_data(pos, tlib2, outdir)
+			if pwr.curr_load >= amount then
+				pwr.curr_load = pwr.curr_load - amount
+				pwr.min_load = math.min(pwr.min_load, pwr.curr_load)
+				pwr.consumed = pwr.consumed + amount
+				Power[netID] = pwr
+				return amount
+			else
+				local consumed = pwr.curr_load
+				pwr.curr_load = 0
+				pwr.min_load = 0
+				pwr.consumed = pwr.consumed + consumed
+				Power[netID] = pwr
+				return consumed
+			end
 		end
 	end
 	return 0
@@ -136,8 +146,20 @@ end
 -- amount is the maximum power, the generator can provide.
 -- cp1 and cp2 are control points for the charge regulator.
 -- From cp1 the charging power is reduced more and more and reaches zero at cp2.
+--
+--        A
+--        |
+--  100 % |-------------------__
+--        |                     --__
+--        |                         --__
+--        |                             --__
+--      --+------------------+---------------+---->
+--        |                 cp1             cp2
+--
 function networks.power.provide_power(pos, tlib2, outdir, amount, cp1, cp2)
-	local netID = networks.get_netID(pos, tlib2, outdir)
+	assert(outdir)
+	assert(amount and amount > 0)
+	local netID = networks.determine_netID(pos, tlib2, outdir)
 	if netID then
 		local pwr = Power[netID] or get_power_data(pos, tlib2, outdir)
 		local x = pwr.curr_load / pwr.max_capa
@@ -173,26 +195,23 @@ end
 -------------------------------------------------------------------------------
 -- Function returns a table with storage level as ratio (0..1) and the
 -- charging state (1 = charging, -1 = uncharging, or 0)
--- Param outdir is optional
 -- Function provides nil if no network is available
 function networks.power.get_storage_data(pos, tlib2, outdir)
-	for _,outdir in ipairs(networks.get_outdirs(pos, tlib2, outdir)) do
-		local netID = networks.get_netID(pos, tlib2, outdir)
-		if netID then
-			local pwr = Power[netID] or get_power_data(pos, tlib2, outdir)
-			local charging = (pwr.provided > pwr.consumed and 1) or (pwr.provided < pwr.consumed and -1) or 0
-			return {level = pwr.curr_load / pwr.max_capa, charging = charging}
-		end
+	assert(outdir)
+	local netID = networks.determine_netID(pos, tlib2, outdir)
+	if netID then
+		local pwr = Power[netID] or get_power_data(pos, tlib2, outdir)
+		local charging = (pwr.provided > pwr.consumed and 1) or (pwr.provided < pwr.consumed and -1) or 0
+		return {level = pwr.curr_load / pwr.max_capa, charging = charging}
 	end
 end
 
 -- To be called for each network storage change (turn on/off of storage/generator nodes)
 function networks.power.start_storage_calc(pos, tlib2, outdir)
-	for _,outdir in ipairs(networks.get_outdirs(pos, tlib2, outdir)) do
-		local netID = networks.get_netID(pos, tlib2, outdir)
-		if netID then
-			Power[netID] = nil
-		end
+	assert(outdir)
+	local netID = networks.determine_netID(pos, tlib2, outdir)
+	if netID then
+		Power[netID] = nil
 	end
 end
 
@@ -206,7 +225,7 @@ function networks.power.turn_switch_on(pos, tlib2, name_off, name_on)
 		node.name = name_on
 		minetest.swap_node(pos, node)
 		tlib2:after_place_tube(pos)
-		meta:set_int("networks_nodename", node.param2)
+		meta:set_int("networks_param2", node.param2)
 		return true
 	elseif meta:contains("networks_param2_copy") then
 		meta:set_int("networks_param2", meta:get_int("networks_param2_copy"))
@@ -237,7 +256,7 @@ end
 -------------------------------------------------------------------------------
 function networks.power.get_network_data(pos, tlib2, outdir)
 	for _,outdir in ipairs(networks.get_outdirs(pos, tlib2, outdir)) do
-		local netID = networks.get_netID(pos, tlib2, outdir)
+		local netID = networks.determine_netID(pos, tlib2, outdir)
 		if netID then
 			local pwr = Power[netID] or get_power_data(pos, tlib2, outdir)
 			local res = {
@@ -260,7 +279,7 @@ end
 
 function networks.power.reset_min_max_load_values(pos, tlib2, outdir)
 	for _,outdir in ipairs(networks.get_outdirs(pos, tlib2, outdir)) do
-		local netID = networks.get_netID(pos, tlib2, outdir)
+		local netID = networks.determine_netID(pos, tlib2, outdir)
 		if netID then
 			local pwr = Power[netID] or get_power_data(pos, tlib2, outdir)
 			pwr.min_load = pwr.curr_load
