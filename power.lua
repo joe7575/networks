@@ -7,6 +7,8 @@
 
 	AGPL v3
 	See LICENSE.txt for more information
+	
+	Power API for power consuming and generating nodes
 
 ]]--
 

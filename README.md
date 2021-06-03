@@ -35,7 +35,12 @@ The mod uses a whitelist for filling material. The function
 
 ### Liquid Networks
 
-tbd.
+Liquid networks consists of following node types:
+
+- Pumps, nodes pumping liquids from/to tanks
+- Tanks, storuing liquids
+- Junctions, to connect pipes to networks
+- Valves, to turn on/off pipe segments
 
 
 ### Test Nodes
@@ -53,6 +58,13 @@ All three nodes can be turned on/off by right-clicking.
 - junction node for power distribution
 - a power switch to turn on/off consumers
 - a tool to hide/open cables and junctions
+
+The file `./test/test_liquid.lua` includes test nodes of each kind of liquid nodes.
+
+- [P] a pump which pumps 2 items every 2 s
+- [T] tree types of tanks (empty, milk, water)
+- junction node
+- a value to connect/disconnect pipes
 
 
 ### License
@@ -86,3 +98,7 @@ Required: tubelib2
 
 **2021-05-30  V0.05**
 - Change power API
+
+**2021-06-03  V0.06**
+- Add 'liquid'
+- bug fixes and improvements

@@ -27,6 +27,7 @@ local NumNodes = 0  -- Used to determine the number of network nodes
 local Flip = tubelib2.Turn180Deg
 local get_nodename = networks.get_nodename
 local get_node = networks.get_node
+
 -------------------------------------------------------------------------------
 -- Debugging
 -------------------------------------------------------------------------------
@@ -57,6 +58,41 @@ local function network_nodes(netID, network)
 	return "Network " .. netw_num(netID) .. ": " .. table.concat(tbl, ", ")
 end
 
+-- Marker entities for debugging purposes
+function networks.set_marker(pos, text, size, ttl)
+	local marker = minetest.add_entity(pos, "networks:marker_cube")
+	if marker ~= nil then
+		marker:set_nametag_attributes({color = "#FFFFFF", text = text})
+		size = size or 1
+		marker:set_properties({visual_size = {x = size, y = size}})
+		if ttl then
+			minetest.after(ttl, marker.remove, marker)
+		end
+	end
+end
+
+minetest.register_entity("networks:marker_cube", {
+	initial_properties = {
+		visual = "cube",
+		textures = {
+			"networks_marker.png",
+			"networks_marker.png",
+			"networks_marker.png",
+			"networks_marker.png",
+			"networks_marker.png",
+			"networks_marker.png",
+		},
+		physical = false,
+		visual_size = {x = 1.1, y = 1.1},
+		collisionbox = {-0.55,-0.55,-0.55, 0.55,0.55,0.55},
+		glow = 8,
+		static_save = false,
+	},
+	on_punch = function(self)
+		self.object:remove()
+	end,
+})
+
 -------------------------------------------------------------------------------
 -- Helper
 -------------------------------------------------------------------------------
@@ -66,6 +102,7 @@ local function net_def(pos, netw_type)
 	if ndef and ndef.networks then
 		return ndef.networks[netw_type]
 	end
+	error("Node " ..  get_nodename(pos) .. " at ".. P2S(pos) .. " has no 'ndef.networks'")
 end
 
 local function net_def2(pos, node_name, netw_type) 
@@ -450,5 +487,7 @@ end
 function networks.get_network_table(pos, tlib2, outdir)
 	assert(outdir)
 	local netID = get_netID(pos, outdir)
-	return get_network(tlib2.tube_type, netID)
+	if netID then
+		return get_network(tlib2.tube_type, netID)
+	end
 end

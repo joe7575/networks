@@ -35,7 +35,7 @@ local Cable = tubelib2.Tube:new({
 	max_tube_length = 100, 
 	tube_type = "pwr",
 	primary_node_names = {"networks:cableS", "networks:cableA", "networks:switch_on"}, 
-	secondary_node_names = {},  -- Will be added via 'power.register_node'
+	secondary_node_names = {},  -- Will be added via 'power.register_nodes'
 	after_place_tube = function(pos, param2, tube_type, num_tubes, tbl)
 		if networks.node_to_be_replaced(pos, param2, tube_type, num_tubes) then
 			local name = minetest.get_node(pos).name
@@ -342,7 +342,7 @@ local function swap_node(pos, name)
 	minetest.swap_node(pos, node)
 end
 
-local function turn_on(pos, tlib2)
+local function turn_on(pos)
 	swap_node(pos, "networks:consumer_on")
 	M(pos):set_string("infotext", "on")
 	local mem = tubelib2.get_mem(pos)
@@ -350,7 +350,7 @@ local function turn_on(pos, tlib2)
 	minetest.get_node_timer(pos):start(CYCLE_TIME)
 end
 
-local function turn_off(pos, tlib2)
+local function turn_off(pos)
 	swap_node(pos, "networks:consumer")
 	M(pos):set_string("infotext", "off")
 	local mem = tubelib2.get_mem(pos)
@@ -361,9 +361,9 @@ end
 local function on_rightclick(pos, node, clicker)
 	local mem = tubelib2.get_mem(pos)
 	if not mem.running and power.power_available(pos, Cable) then
-		turn_on(pos, Cable)
+		turn_on(pos)
 	else
-		turn_off(pos, Cable)
+		turn_off(pos)
 	end
 end
 
