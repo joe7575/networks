@@ -72,6 +72,8 @@ function networks.power.register_nodes(names, tlib2, node_type, valid_sides)
 	elseif node_type == "con" or node_type == "junc" then
 		assert(not valid_sides or type(valid_sides) == "table")
 		valid_sides = valid_sides or {"B", "R", "F", "L", "D", "U"}
+	elseif node_type and type(node_type) == "string" then
+		valid_sides = valid_sides or {"B", "R", "F", "L", "D", "U"}
 	else
 		error("parameter error")
 	end

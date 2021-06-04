@@ -29,17 +29,15 @@ local Pipe = tubelib2.Tube:new({
 	max_tube_length = 100, 
 	tube_type = "liq",
 	primary_node_names = {"networks:pipeS", "networks:pipeA", "networks:valve_on"}, 
-	secondary_node_names = {},  -- Will be added via 'liquids.register_nodes'
+	secondary_node_names = {},  -- Names will be added via 'liquids.register_nodes'
 	after_place_tube = function(pos, param2, tube_type, num_tubes, tbl)
-		if networks.node_to_be_replaced(pos, param2, tube_type, num_tubes) then
-			local name = minetest.get_node(pos).name
-			if name == "networks:valve_on" then
-				minetest.swap_node(pos, {name = "networks:valve_on", param2 = param2})
-			elseif name == "networks:valve_off" then
-				minetest.swap_node(pos, {name = "networks:valve_off", param2 = param2})
-			else
-				minetest.swap_node(pos, {name = "networks:pipe"..tube_type, param2 = param2})
-			end
+		local name = minetest.get_node(pos).name
+		if name == "networks:valve_on" then
+			minetest.swap_node(pos, {name = "networks:valve_on", param2 = param2})
+		elseif name == "networks:valve_off" then
+			minetest.swap_node(pos, {name = "networks:valve_off", param2 = param2})
+		else
+			minetest.swap_node(pos, {name = "networks:pipe"..tube_type, param2 = param2})
 		end
 	end,
 })
@@ -194,8 +192,8 @@ local function pumping(pos)
 	local mem = tubelib2.get_mem(pos)
 	local outdir = M(pos):get_int("outdir")
 	local taken, name = liquid.take(pos, Pipe, networks.Flip[outdir], nil, AMOUNT, mem.dbg_cycles > 0)
-	print("pumping " .. name .. " " .. taken)
 	if taken > 0 then
+		print("pumping " .. name .. " " .. taken)
 		local leftover = liquid.put(pos, Pipe, outdir, name, taken, mem.dbg_cycles > 0)
 		if leftover and leftover > 0 then
 			liquid.untake(pos, Pipe, networks.Flip[outdir], name, leftover)
@@ -204,6 +202,8 @@ local function pumping(pos)
 				return false
 			end
 		end
+	else
+		print("pumping -")
 	end
 	mem.dbg_cycles = mem.dbg_cycles - 1
 	return true

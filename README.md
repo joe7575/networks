@@ -43,9 +43,15 @@ Liquid networks consists of following node types:
 - Valves, to turn on/off pipe segments
 
 
+### Control
+
+In addition to any network the 'control' API can be used to send commands
+or request data from nodes, specified via 'node_type'.
+
+
 ### Test Nodes
 
-The file `./test/test_power.lua` includes test nodes of each kind of power nodes.
+The file `./test/test_power.lua` contains test nodes of each kind of power nodes.
 It can be used to play with the features and to study the use of `networks`.
 
 - [G] a generator, which provides 20 units of power every 2 s
@@ -59,12 +65,15 @@ All three nodes can be turned on/off by right-clicking.
 - a power switch to turn on/off consumers
 - a tool to hide/open cables and junctions
 
-The file `./test/test_liquid.lua` includes test nodes of each kind of liquid nodes.
+The file `./test/test_liquid.lua` contains test nodes of each kind of liquid nodes.
 
 - [P] a pump which pumps 2 items every 2 s
 - [T] tree types of tanks (empty, milk, water)
 - junction node
 - a value to connect/disconnect pipes
+
+The file `./test/test_control.lua` contains server [S] and client [C] nodes
+to demonstrate simple on/off commands.
 
 
 ### License
@@ -102,3 +111,6 @@ Required: tubelib2
 **2021-06-03  V0.06**
 - Add 'liquid'
 - bug fixes and improvements
+
+**2021-06-04  V0.07**
+- Add 'control' API

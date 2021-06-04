@@ -35,7 +35,7 @@ local Cable = tubelib2.Tube:new({
 	max_tube_length = 100, 
 	tube_type = "pwr",
 	primary_node_names = {"networks:cableS", "networks:cableA", "networks:switch_on"}, 
-	secondary_node_names = {},  -- Will be added via 'power.register_nodes'
+	secondary_node_names = {},  -- Names will be added via 'power.register_nodes'
 	after_place_tube = function(pos, param2, tube_type, num_tubes, tbl)
 		if networks.node_to_be_replaced(pos, param2, tube_type, num_tubes) then
 			local name = minetest.get_node(pos).name
@@ -609,3 +609,6 @@ minetest.register_chatcommand("power_data", {
 		
     end
 })
+
+return Cable
+ 
