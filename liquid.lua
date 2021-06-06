@@ -20,7 +20,7 @@ local N = tubelib2.get_node_lvm
 local LQD = function(pos) return (minetest.registered_nodes[N(pos).name] or {}).liquid end
 
 networks.liquid = {}
-
+networks.registered_networks.liquid = {}
 
 -- return list of nodes {pos = ..., indir = ...} of given node_type
 local function get_network_table(pos, tlib2, outdir, node_type)
@@ -62,6 +62,7 @@ function networks.liquid.register_nodes(names, tlib2, node_type, valid_sides, li
 	end
 	
 	tlib2:add_secondary_node_names(names)
+	networks.registered_networks.liquid[tlib2.tube_type] = tlib2
 	
 	for _, name in ipairs(names) do
 		local ndef = minetest.registered_nodes[name]

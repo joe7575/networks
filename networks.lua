@@ -31,6 +31,8 @@ local get_node = networks.get_node
 -------------------------------------------------------------------------------
 -- Debugging
 -------------------------------------------------------------------------------
+-- Table for all registered tubelib2 instances
+networks.registered_networks = {}  -- {api_type = {instance,...}}
 
 -- Maintain simple numbers for the bulky netID hashes
 local DbgNetIDs = {}
@@ -453,6 +455,9 @@ networks.get_outdirs = get_outdirs
 -- Provide own netID
 -- networks.get_netID(pos, outdir)
 networks.get_netID = get_netID
+
+-- networks.get_node_connection_dirs(pos, netw_type)
+networks.get_node_connection_dirs = get_node_connection_dirs
 
 -- To be called from each node via 'tubelib2_on_update2'
 -- 'output' is optional and only needed for nodes with dedicated

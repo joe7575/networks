@@ -19,6 +19,7 @@ local M = minetest.get_meta
 local N = tubelib2.get_node_lvm
 
 networks.power = {}
+networks.registered_networks.power = {}
 
 -- Storage parameters:
 -- capa = maximum value in power units
@@ -37,8 +38,8 @@ local function get_power_data(pos, tlib2, outdir)
 	for _,item in ipairs(netw.gen or {}) do
 		local ndef = minetest.registered_nodes[N(item.pos).name]
 		local data = ndef.get_generator_data(item.pos, tlib2)
-		max_capa = max_capa + data.perf -- generator performance = capa
-		curr_load = curr_load + (data.level * data.perf)
+		max_capa = max_capa + data.capa
+		curr_load = curr_load + (data.level * data.capa)
 	end
 	-- Storage systems
 	for _,item in ipairs(netw.sto or {}) do
@@ -79,6 +80,7 @@ function networks.power.register_nodes(names, tlib2, node_type, valid_sides)
 	end
 	
 	tlib2:add_secondary_node_names(names)
+	networks.registered_networks.power[tlib2.tube_type] = tlib2
 	
 	for _, name in ipairs(names) do
 		local ndef = minetest.registered_nodes[name]
@@ -225,34 +227,66 @@ end
 function networks.power.turn_switch_on(pos, tlib2, name_off, name_on)
 	local node = N(pos)
 	local meta = M(pos)
+	local changed = false
+	
+	networks.legacy_switches(meta)
+	
 	if node.name == name_off then
 		node.name = name_on
-		minetest.swap_node(pos, node)
-		tlib2:after_place_tube(pos)
-		meta:set_int("networks_param2", node.param2)
-		return true
-	elseif meta:contains("networks_param2_copy") then
-		meta:set_int("networks_param2", meta:get_int("networks_param2_copy"))
-		tlib2:after_place_tube(pos)
-		return true
+		changed = true
+	elseif meta:get_string("netw_name") == name_off then
+		meta:set_string("netw_name", name_on)
+	else
+		return false
 	end
+	
+	if meta:contains("netw_param2") then
+		meta:set_int("netw_param2", meta:get_int("netw_param2_copy"))
+	else	
+		node.param2 = meta:get_int("netw_param2_copy")
+	end
+	meta:set_int("netw_param2_copy", 0)
+	
+	if changed then
+		minetest.swap_node(pos, node)
+	end
+
+	tlib2:after_place_tube(pos)
+	return true
 end
 
 function networks.power.turn_switch_off(pos, tlib2, name_off, name_on)
 	local node = N(pos)
 	local meta = M(pos)
+	local changed = false
+	
+	networks.legacy_switches(meta)
+	
 	if node.name == name_on then
 		node.name = name_off
-		minetest.swap_node(pos, node)
-		meta:set_int("networks_param2", 0)
-		tlib2:after_dig_tube(pos, node)
-		return true
-	elseif meta:contains("networks_param2") then
-		meta:set_int("networks_param2_copy", meta:get_int("networks_param2"))
-		meta:set_int("networks_param2", 0)
-		tlib2:after_dig_tube(pos, node)
-		return true
+		changed = true
+	elseif meta:get_string("netw_name") == name_on then
+		meta:set_string("netw_name", name_off)
+	else
+		return false
 	end
+	
+	if meta:contains("netw_param2") then
+		meta:set_int("netw_param2_copy", meta:get_int("netw_param2"))
+		--meta:set_int("netw_param2", 0)
+	else	
+		meta:set_int("netw_param2_copy", node.param2)
+	end
+	
+	if changed then
+		minetest.swap_node(pos, node)
+	end
+	
+	if meta:contains("netw_param2") then
+		node.param2 = meta:get_int("netw_param2")
+	end
+	tlib2:after_dig_tube(pos, node)
+	return true
 end
 
 -------------------------------------------------------------------------------

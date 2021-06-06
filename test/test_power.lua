@@ -37,16 +37,13 @@ local Cable = tubelib2.Tube:new({
 	primary_node_names = {"networks:cableS", "networks:cableA", "networks:switch_on"}, 
 	secondary_node_names = {},  -- Names will be added via 'power.register_nodes'
 	after_place_tube = function(pos, param2, tube_type, num_tubes, tbl)
-		if networks.node_to_be_replaced(pos, param2, tube_type, num_tubes) then
-			local name = minetest.get_node(pos).name
-			if name == "networks:switch_on" then
-				minetest.swap_node(pos, {name = "networks:switch_on", param2 = param2})
-			elseif name == "networks:switch_off" then
-				minetest.swap_node(pos, {name = "networks:switch_off", param2 = param2})
-			else
-				minetest.swap_node(pos, {name = "networks:cable"..tube_type, param2 = param2})
-			end
+		local name = minetest.get_node(pos).name
+		if name == "networks:switch_on" or name == "networks:switch_off" then
+			minetest.swap_node(pos, {name = name, param2 = param2 % 32})
+		elseif not networks.hidden_name(pos) then
+			minetest.swap_node(pos, {name = "networks:cable"..tube_type, param2 = param2 % 32})
 		end
+		M(pos):set_int("netw_param2", param2)
 	end,
 })
 
@@ -178,8 +175,10 @@ local names = networks.register_junction("networks:junction", size, Boxes, Cable
 	end,
 	-- junction needs own 'tubelib2_on_update2' to be able to call networks.junction_type
 	tubelib2_on_update2 = function(pos, outdir, tlib2, node)
-		local name = "networks:junction" .. networks.junction_type(pos, Cable)
-		minetest.swap_node(pos, {name = name, param2 = 0})
+		if not networks.hidden_name(pos) then
+			local name = "networks:junction" .. networks.junction_type(pos, Cable)
+			minetest.swap_node(pos, {name = name, param2 = 0})
+		end
 		power.update_network(pos, 0, tlib2, node)
 	end,
 	after_dig_node = function(pos, oldnode, oldmetadata, digger)
@@ -242,12 +241,7 @@ minetest.register_node("networks:generator", {
 		power.start_storage_calc(pos, Cable, outdir)
 	end,
 	get_generator_data = function(pos, tlib2)
-		local mem = tubelib2.get_mem(pos)
-		if mem.running then
-			return {level = (mem.load or 0) / GEN_MAX, perf = GEN_MAX}
-		else
-			return {level = 0, perf = 0}
-		end
+		return {level = 0, capa = GEN_MAX * 2}  -- generator capa = 2 * performance
 	end,
 	paramtype2 = "facedir",
 	on_rotate = screwdriver.disallow,
@@ -519,58 +513,27 @@ power.register_nodes({"networks:switch_off"}, Cable, "con", {})
 -- Hide/open tool
 -------------------------------------------------------------------------------
 -- Hide or open a node
-local function replace_node(pos, placer)
-	local name = placer:get_player_name()
-	if minetest.is_protected(pos, name) then
-		return
-	end
-	local node = minetest.get_node(pos)
-	local res = false
-	if minetest.get_item_group(node.name, "test_trowel") == 1 then
-		res = networks.hide_node(pos, node, placer)
-	elseif networks.hidden_name(pos) then
-		res = networks.open_node(pos, node, placer)
-	end
-	if res then
-		minetest.sound_play("default_dig_snappy", {
-			pos = pos, 
-			gain = 1,
-			max_hear_distance = 5})
-	elseif placer and placer.get_player_name then
-		minetest.chat_send_player(placer:get_player_name(), "Invalid fill material in inventory slot 1!")
-	end
-end
-
--- debug print of node rleated data
-local function debug_print(pos)
-	local num = 0
-	local s = ""
-	local outdir = M(pos):get_int("outdir")
-	local netID = networks.determine_netID(pos, Cable, outdir)
-	if netID then
-		num = networks.netw_num(netID)
-		local network = networks.get_network("pwr", netID) or {}
-		s = networks.network_nodes(netID, network)
-	end
-	local node = minetest.get_node(pos)
-	local ndef = minetest.registered_nodes[node.name]
-	local mem = tubelib2.get_mem(pos)
-	local metadata = M(pos):to_table()
-	
-	print(" ################## Network " .. num .. " #######################")
-	print("networks = " .. dump(ndef.networks))
-	print("mem = " .. dump(mem))
-	print("metadata = " .. dump(metadata.fields))
-	print(s)
-end
-
-local function action(itemstack, placer, pointed_thing)
+local function replace_node(itemstack, placer, pointed_thing)
 	if pointed_thing.type == "node" then
 		local pos = pointed_thing.under
-		if placer:get_player_control().sneak then
-			debug_print(pos)
-		else
-			replace_node(pos, placer)
+		local name = placer:get_player_name()
+		if minetest.is_protected(pos, name) then
+			return
+		end
+		local node = minetest.get_node(pos)
+		local res = false
+		if minetest.get_item_group(node.name, "test_trowel") == 1 then
+			res = networks.hide_node(pos, node, placer)
+		elseif networks.hidden_name(pos) then
+			res = networks.open_node(pos, node, placer)
+		end
+		if res then
+			minetest.sound_play("default_dig_snappy", {
+				pos = pos, 
+				gain = 1,
+				max_hear_distance = 5})
+		elseif placer and placer.get_player_name then
+			minetest.chat_send_player(placer:get_player_name(), "Invalid fill material in inventory slot 1!")
 		end
 	end
 end
@@ -581,8 +544,8 @@ minetest.register_tool("networks:tool", {
 	wield_image = "networks_tool.png",
 	use_texture_alpha = "clip",
 	groups = {cracky=1},
-	on_use = action,
-	on_place = action,
+	on_use = replace_node,
+	on_place = replace_node,
 	node_placement_prediction = "",
 	stack_max = 1,
 })

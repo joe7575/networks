@@ -33,4 +33,4 @@ dofile(MP .. "/control.lua")
 --dofile(MP .. "/test/test_liquid.lua")
 local Cable = dofile(MP .. "/test/test_power.lua")
 assert(loadfile(MP .. "/test/test_control.lua"))(Cable)
-
+dofile(MP .. "/test/test_tool.lua")
