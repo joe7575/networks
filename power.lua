@@ -229,8 +229,6 @@ function networks.power.turn_switch_on(pos, tlib2, name_off, name_on)
 	local meta = M(pos)
 	local changed = false
 	
-	networks.legacy_switches(meta)
-	
 	if node.name == name_off then
 		node.name = name_on
 		changed = true
@@ -259,8 +257,6 @@ function networks.power.turn_switch_off(pos, tlib2, name_off, name_on)
 	local node = N(pos)
 	local meta = M(pos)
 	local changed = false
-	
-	networks.legacy_switches(meta)
 	
 	if node.name == name_on then
 		node.name = name_off

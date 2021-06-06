@@ -34,13 +34,6 @@ end
 -------------------------------------------------------------------------------
 -- API
 -------------------------------------------------------------------------------
-function networks.legacy_switches(meta)
-	if meta:contains("tl2_param2_copy") then
-		meta:set_string("netw_param2_copy", meta:get_string("tl2_param2_copy"))
-		meta:set_string("tl2_param2_copy", "")
-	end
-end
-
 function networks.hidden_name(pos)
 	local meta = M(pos)
 	legacy_names(meta)
