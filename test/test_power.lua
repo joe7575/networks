@@ -22,7 +22,13 @@ local CON_MAX = 5
 local HIDDEN = true   -- enable/disable hidden nodes
 
 local function round(val)
-	return math.floor(val + 0.5)
+	if val > 100 then
+		return math.floor(val + 0.5)
+	elseif val > 10 then
+		return math.floor((val * 10) + 0.5) / 10
+	else
+		return math.floor((val * 100) + 0.5) / 100
+	end
 end
 
 local power = networks.power
@@ -222,6 +228,7 @@ minetest.register_node("networks:generator", {
 		local outdir = M(pos):get_int("outdir")
 		local mem = tubelib2.get_mem(pos)
 		mem.provided = power.provide_power(pos, Cable, outdir, GEN_MAX)
+		mem.load = power.get_storage_load(pos, Cable, outdir, GEN_MAX)
 		M(pos):set_string("infotext", "providing "..round(mem.provided))
 		return true
 	end,
@@ -241,7 +248,11 @@ minetest.register_node("networks:generator", {
 		power.start_storage_calc(pos, Cable, outdir)
 	end,
 	get_generator_data = function(pos, tlib2)
-		return {level = 0, capa = GEN_MAX * 2}  -- generator capa = 2 * performance
+		local mem = tubelib2.get_mem(pos)
+		if mem.running then
+			-- generator storage capa = 2 * performance
+			return {level = (mem.load or 0) / GEN_MAX, perf = GEN_MAX, capa = GEN_MAX * 2} 
+		end
 	end,
 	paramtype2 = "facedir",
 	on_rotate = screwdriver.disallow,
@@ -310,8 +321,6 @@ minetest.register_node("networks:storage", {
 		local mem = tubelib2.get_mem(pos)
 		if mem.running then
 			return {level = (mem.load or 0) / STORAGE_CAPA, capa = STORAGE_CAPA}
-		else
-			return {level = 0, capa = 0}
 		end
 	end,
 	paramtype2 = "facedir",
@@ -561,11 +570,10 @@ minetest.register_chatcommand("power_data", {
 		pos = vector.round(pos)
 		local data = power.get_network_data(pos, Cable)
 		if data then
-			local s = string.format("Netw %u: generated = %u/%u, consumed = %u, storage load = %u/%u (min = %u, max = %u)",
+			local s = string.format("Netw %u: generated = %u/%u, consumed = %u, storage load = %u/%u",
 				data.netw_num, round(data.provided), 
 				data.available, round(data.consumed), 
-				round(data.curr_load), round(data.max_capa), 
-				round(data.min_load), round(data.max_load))
+				round(data.curr_load), round(data.max_capa))
 			return true, s
 		end
 		return false, "No valid node position!"

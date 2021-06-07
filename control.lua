@@ -68,7 +68,7 @@ end
 -- Send a request with 'topic' string to all 'tlib2' network 
 -- nodes of type 'node_type'.
 -- Function returns a list with all responses.
-function networks.liquid.request(pos, tlib2, outdir, node_type, topic)
+function networks.control.request(pos, tlib2, outdir, node_type, topic)
 	assert(outdir and node_type and topic)
 	assert(type(topic) == "string")
 	local t = {}

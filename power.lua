@@ -21,41 +21,55 @@ local N = tubelib2.get_node_lvm
 networks.power = {}
 networks.registered_networks.power = {}
 
+local DEFAULT_DATA = {
+	curr_load = 0,  -- network storage value
+	max_capa = 0,   -- network storage capacity
+	consumed = 0,   -- consumed power by consumers 
+	provided = 0,   -- provided power by generators 
+	available = 0,  -- max. available generator power
+	netw_num = 0,   -- network number
+}
+
 -- Storage parameters:
 -- capa = maximum value in power units
 -- load = current value in power units
 -- level = ratio value (load/capa) (0..1)
 
-local Power = {}  -- {netID = {curr_load, min_load, max_load, max_capa, consumed, provided, available}}
+local Power = {}  -- {netID = {curr_load, max_capa, consumed, provided, available}}
 
 -- Determine load, capa and other power network data
 local function get_power_data(pos, tlib2, outdir)
 	assert(outdir)
-	local netw = networks.get_network_table(pos, tlib2, outdir)
+	local netw = networks.get_network_table(pos, tlib2, outdir) or {}
 	local max_capa = 0
+	local max_perf = 0
 	local curr_load = 0
 	-- Generators
 	for _,item in ipairs(netw.gen or {}) do
 		local ndef = minetest.registered_nodes[N(item.pos).name]
 		local data = ndef.get_generator_data(item.pos, tlib2)
-		max_capa = max_capa + data.capa
-		curr_load = curr_load + (data.level * data.capa)
+		if data then
+			max_capa = max_capa + data.capa
+			max_perf = max_perf + data.perf
+			curr_load = curr_load + (data.level * data.capa)
+		end
 	end
 	-- Storage systems
 	for _,item in ipairs(netw.sto or {}) do
 		local ndef = minetest.registered_nodes[N(item.pos).name]
 		local data = ndef.get_storage_data(item.pos, tlib2)
-		max_capa = max_capa + data.capa
-		curr_load = curr_load + (data.level * data.capa)
+		if data then
+			max_capa = max_capa + data.capa
+			curr_load = curr_load + (data.level * data.capa)
+		end
 	end
 	return {
 		curr_load = curr_load,    -- network storage value
-		min_load = curr_load,     -- minimal storage value
-		max_load = curr_load,     -- maximal storage value
 		max_capa = max_capa,      -- network storage capacity
-		consumed = 0,             -- consumed power over all consumers
-		provided = 0,             -- provided power over all generators
-		available = 0,            -- max. available power over all generators
+		max_perf = max_perf,      -- max. available power
+		consumed = 0,             -- consumed power
+		provided = 0,             -- provided power
+		available = 0,            -- available power          
 		num_nodes = netw.num_nodes,
 	}
 end
@@ -129,14 +143,12 @@ function networks.power.consume_power(pos, tlib2, outdir, amount)
 			local pwr = Power[netID] or get_power_data(pos, tlib2, outdir)
 			if pwr.curr_load >= amount then
 				pwr.curr_load = pwr.curr_load - amount
-				pwr.min_load = math.min(pwr.min_load, pwr.curr_load)
 				pwr.consumed = pwr.consumed + amount
 				Power[netID] = pwr
 				return amount
 			else
 				local consumed = pwr.curr_load
 				pwr.curr_load = 0
-				pwr.min_load = 0
 				pwr.consumed = pwr.consumed + consumed
 				Power[netID] = pwr
 				return consumed
@@ -172,12 +184,11 @@ function networks.power.provide_power(pos, tlib2, outdir, amount, cp1, cp2)
 		
 		pwr.available = pwr.available + amount
 		amount = math.min(amount, pwr.max_capa - pwr.curr_load)
-		cp1 = cp1 or 0.5
+		cp1 = cp1 or 0.8
 		cp2 = cp2 or 1.0
 		
 		if x < cp1 then  -- charge with full power
 			pwr.curr_load = pwr.curr_load + amount
-			pwr.max_load = math.max(pwr.max_load, pwr.curr_load)
 			pwr.provided = pwr.provided + amount
 			Power[netID] = pwr
 			return amount
@@ -185,13 +196,22 @@ function networks.power.provide_power(pos, tlib2, outdir, amount, cp1, cp2)
 			local factor = 1 - ((x - cp1) / (cp2 - cp1))
 			local provided = amount * factor
 			pwr.curr_load = pwr.curr_load + provided
-			pwr.max_load = math.max(pwr.max_load, pwr.curr_load)
 			pwr.provided = pwr.provided + provided
 			Power[netID] = pwr
 			return provided
 		else  -- turn off
 			return 0
 		end
+	end
+	return 0
+end
+
+-- Function for generators with storage capacity
+function networks.power.get_storage_load(pos, tlib2, outdir, amount)
+	local netID = networks.determine_netID(pos, tlib2, outdir)
+	if netID then
+		local pwr = Power[netID] or get_power_data(pos, tlib2, outdir)
+		return pwr.curr_load / pwr.max_capa * amount
 	end
 	return 0
 end
@@ -293,15 +313,24 @@ function networks.power.get_network_data(pos, tlib2, outdir)
 		local netID = networks.determine_netID(pos, tlib2, outdir)
 		if netID then
 			local pwr = Power[netID] or get_power_data(pos, tlib2, outdir)
+			local consumed, provided, available
+			if pwr.available > 0 then
+				local fac = pwr.max_perf / pwr.available
+				available = pwr.max_perf
+				provided = pwr.provided * fac
+				consumed = pwr.consumed * fac
+			else
+				available = pwr.max_perf
+				provided = 0
+				consumed = pwr.consumed
+			end
 			local res = {
-				curr_load = pwr.curr_load,
-				min_load = pwr.min_load, 
-				max_load = pwr.max_load, 
-				max_capa = pwr.max_capa,
-				consumed = pwr.consumed,
-				provided = pwr.provided,
-				available = pwr.available,
-				netw_num = networks.netw_num(netID),
+				curr_load = pwr.curr_load,             -- network storage value
+				max_capa = pwr.max_capa,               -- network storage capacity
+				consumed = consumed,                   -- consumed power by consumers 
+				provided = provided,                   -- provided power by generators 
+				available = available,                 -- max. available generator power
+				netw_num = networks.netw_num(netID),   -- network number
 			}
 			pwr.consumed = 0
 			pwr.provided = 0
@@ -309,16 +338,5 @@ function networks.power.get_network_data(pos, tlib2, outdir)
 			return res
 		end
 	end
-end
-
-function networks.power.reset_min_max_load_values(pos, tlib2, outdir)
-	for _,outdir in ipairs(networks.get_outdirs(pos, tlib2, outdir)) do
-		local netID = networks.determine_netID(pos, tlib2, outdir)
-		if netID then
-			local pwr = Power[netID] or get_power_data(pos, tlib2, outdir)
-			pwr.min_load = pwr.curr_load
-			pwr.max_load = pwr.curr_load
-			return
-		end
-	end
+	return DEFAULT_DATA
 end
