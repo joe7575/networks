@@ -47,7 +47,7 @@ local function get_power_data(pos, tlib2, outdir)
 	-- Generators
 	for _,item in ipairs(netw.gen or {}) do
 		local ndef = minetest.registered_nodes[N(item.pos).name]
-		local data = ndef.get_generator_data(item.pos, tlib2)
+		local data = ndef.get_generator_data and ndef.get_generator_data(item.pos, tlib2)
 		if data then
 			max_capa = max_capa + data.capa
 			max_perf = max_perf + data.perf
@@ -57,7 +57,7 @@ local function get_power_data(pos, tlib2, outdir)
 	-- Storage systems
 	for _,item in ipairs(netw.sto or {}) do
 		local ndef = minetest.registered_nodes[N(item.pos).name]
-		local data = ndef.get_storage_data(item.pos, tlib2)
+		local data = ndef.get_storage_data and ndef.get_storage_data(item.pos, tlib2)
 		if data then
 			max_capa = max_capa + data.capa
 			curr_load = curr_load + (data.level * data.capa)
@@ -136,7 +136,7 @@ end
 
 -- Param outdir is optional
 function networks.power.consume_power(pos, tlib2, outdir, amount)
-	assert(amount and amount > 0)
+	assert(amount)
 	for _,outdir in ipairs(networks.get_outdirs(pos, tlib2, outdir)) do
 		local netID = networks.determine_netID(pos, tlib2, outdir)
 		if netID then
@@ -211,7 +211,9 @@ function networks.power.get_storage_load(pos, tlib2, outdir, amount)
 	local netID = networks.determine_netID(pos, tlib2, outdir)
 	if netID then
 		local pwr = Power[netID] or get_power_data(pos, tlib2, outdir)
-		return pwr.curr_load / pwr.max_capa * amount
+		if pwr.max_capa and pwr.max_capa > 0 then
+			return pwr.curr_load / pwr.max_capa * amount
+		end
 	end
 	return 0
 end

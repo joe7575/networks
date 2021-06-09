@@ -56,11 +56,10 @@ local function print_power_network_data(pos, api, netw_type)
 	local tlib2 = networks.registered_networks[api][netw_type]
 	local data = power.get_network_data(pos, tlib2)
 	if data then
-		local s = string.format("- Netw %u: generated = %u/%u, consumed = %u, storage load = %u/%u (min = %u, max = %u)",
+		local s = string.format("- Netw %u: generated = %u/%u, consumed = %u, storage load = %u/%u",
 			data.netw_num, round(data.provided), 
 			data.available, round(data.consumed), 
-			round(data.curr_load), round(data.max_capa), 
-			round(data.min_load), round(data.max_load))
+			round(data.curr_load), round(data.max_capa))
 		print(s)
 	else
 		print("- Node has no '" .. netw_type .. "' network!!!")
