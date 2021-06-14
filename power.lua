@@ -41,7 +41,7 @@ local Power = {}  -- {netID = {curr_load, max_capa, consumed, provided, availabl
 local function get_power_data(pos, tlib2, outdir)
 	assert(outdir)
 	local netw = networks.get_network_table(pos, tlib2, outdir) or {}
-	local max_capa = 0
+	local max_capa = 1  -- to prevent nan
 	local max_perf = 0
 	local curr_load = 0
 	-- Generators
