@@ -473,7 +473,8 @@ function networks.determine_netID(pos, tlib2, outdir)
 	assert(outdir)
 	local netID = get_netID(pos, outdir)
 	if netID then
-		if netID > 0 then  -- real netID   
+		if netID > 0 then  -- real netID 
+			get_network(tlib2.tube_type, netID)
 			return netID 
 		end
 		return -- no network available
