@@ -109,6 +109,7 @@ end
 -- tubelib2_on_update2 or register_on_tube_update2
 function networks.power.update_network(pos, outdir, tlib2, node)
 	local ndef = networks.net_def(pos, tlib2.tube_type)
+	assert(ndef, "node " .. N(pos).name .. " has no 'networks." .. tlib2.tube_type .. "' table")
 	if ndef.ntype == "junc" then
 		outdir = 0
 	end

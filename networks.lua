@@ -410,21 +410,21 @@ networks.Flip = tubelib2.Turn180Deg
 -- networks.net_def(pos, netw_type)
 networks.net_def = net_def
 
---	sides:                                  outdir: 
---				U                    
---				|    B                               
---				|   /                                 6  (N)
---			 +--|-----+                               |  1
---			/   o    /|                               | /
---		   +--------+ |                               |/
---	L <----|        |o----> R           (W) 4 <-------+-------> 2 (O)
---		   |    o   | |                              /|
---		   |   /    | +                             / |
---		   |  /     |/                             3  |
---		   +-/------+                            (S)  5
---			/   |
---		   F    |
---				D 
+--	sides:                               outdir: 
+--              U
+--              |    B
+--              |   /                              6  (N)
+--           +--|-----+                            |  1
+--          /   o    /|                            | /
+--         +--------+ |                            |/
+--  L <----|        |o----> R        (W) 4 <-------+-------> 2 (O)
+--         |    o   | |                           /|
+--         |   /    | +                          / |
+--         |  /     |/                          3  |
+--         +-/------+                        (S)   5
+--          /   |
+--         F    |
+--              D
 --
 -- networks.side_to_outdir(pos, side)
 networks.side_to_outdir = side_to_outdir
