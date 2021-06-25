@@ -38,7 +38,7 @@ local DEFAULT_DATA = {
 local Power = {}  -- {netID = {curr_load, max_capa, consumed, provided, available}}
 
 -- Determine load, capa and other power network data
-local function get_power_data(pos, tlib2, outdir)
+local function get_power_data(pos, tlib2, outdir, netID)
 	assert(outdir)
 	local netw = networks.get_network_table(pos, tlib2, outdir) or {}
 	local max_capa = 1  -- to prevent nan
@@ -49,9 +49,9 @@ local function get_power_data(pos, tlib2, outdir)
 		local ndef = minetest.registered_nodes[N(item.pos).name]
 		local data = ndef.get_generator_data and ndef.get_generator_data(item.pos, tlib2)
 		if data then
-			max_capa = max_capa + data.capa
-			max_perf = max_perf + data.perf
-			curr_load = curr_load + (data.level * data.capa)
+			max_capa = max_capa + (data.capa or 0)
+			max_perf = max_perf + (data.perf or 0)
+			curr_load = curr_load + ((data.level or 0) * (data.capa or 0))
 		end
 	end
 	-- Storage systems
@@ -59,11 +59,11 @@ local function get_power_data(pos, tlib2, outdir)
 		local ndef = minetest.registered_nodes[N(item.pos).name]
 		local data = ndef.get_storage_data and ndef.get_storage_data(item.pos, tlib2)
 		if data then
-			max_capa = max_capa + data.capa
-			curr_load = curr_load + (data.level * data.capa)
+			max_capa = max_capa + (data.capa or 0)
+			curr_load = curr_load + ((data.level or 0) * (data.capa or 0))
 		end
 	end
-	return {
+	Power[netID] = {
 		curr_load = curr_load,    -- network storage value
 		max_capa = max_capa,      -- network storage capacity
 		max_perf = max_perf,      -- max. available power
@@ -72,6 +72,7 @@ local function get_power_data(pos, tlib2, outdir)
 		available = 0,            -- available power          
 		num_nodes = netw.num_nodes,
 	}
+	return Power[netID]
 end
 
 -------------------------------------------------------------------------------
@@ -129,7 +130,7 @@ function networks.power.power_available(pos, tlib2, outdir)
 	for _,outdir in ipairs(networks.get_outdirs(pos, tlib2, outdir)) do
 		local netID = networks.determine_netID(pos, tlib2, outdir)
 		if netID then
-			local pwr = Power[netID] or get_power_data(pos, tlib2, outdir)
+			local pwr = Power[netID] or get_power_data(pos, tlib2, outdir, netID)
 			return pwr.curr_load > 0
 		end
 	end
@@ -141,17 +142,15 @@ function networks.power.consume_power(pos, tlib2, outdir, amount)
 	for _,outdir in ipairs(networks.get_outdirs(pos, tlib2, outdir)) do
 		local netID = networks.determine_netID(pos, tlib2, outdir)
 		if netID then
-			local pwr = Power[netID] or get_power_data(pos, tlib2, outdir)
+			local pwr = Power[netID] or get_power_data(pos, tlib2, outdir, netID)
 			if pwr.curr_load >= amount then
 				pwr.curr_load = pwr.curr_load - amount
 				pwr.consumed = pwr.consumed + amount
-				Power[netID] = pwr
 				return amount
 			else
 				local consumed = pwr.curr_load
 				pwr.curr_load = 0
 				pwr.consumed = pwr.consumed + consumed
-				Power[netID] = pwr
 				return consumed
 			end
 		end
@@ -180,7 +179,7 @@ function networks.power.provide_power(pos, tlib2, outdir, amount, cp1, cp2)
 	assert(amount and amount > 0)
 	local netID = networks.determine_netID(pos, tlib2, outdir)
 	if netID then
-		local pwr = Power[netID] or get_power_data(pos, tlib2, outdir)
+		local pwr = Power[netID] or get_power_data(pos, tlib2, outdir, netID)
 		local x = pwr.curr_load / pwr.max_capa
 		
 		pwr.available = pwr.available + amount
@@ -191,14 +190,12 @@ function networks.power.provide_power(pos, tlib2, outdir, amount, cp1, cp2)
 		if x < cp1 then  -- charge with full power
 			pwr.curr_load = pwr.curr_load + amount
 			pwr.provided = pwr.provided + amount
-			Power[netID] = pwr
 			return amount
 		elseif x < cp2 then  -- charge with reduced power
 			local factor = 1 - ((x - cp1) / (cp2 - cp1))
 			local provided = amount * factor
 			pwr.curr_load = pwr.curr_load + provided
 			pwr.provided = pwr.provided + provided
-			Power[netID] = pwr
 			return provided
 		else  -- turn off
 			return 0
@@ -211,9 +208,11 @@ end
 function networks.power.get_storage_load(pos, tlib2, outdir, amount)
 	local netID = networks.determine_netID(pos, tlib2, outdir)
 	if netID then
-		local pwr = Power[netID] or get_power_data(pos, tlib2, outdir)
+		local pwr = Power[netID] or get_power_data(pos, tlib2, outdir, netID)
 		if pwr.max_capa and pwr.max_capa > 0 then
 			return pwr.curr_load / pwr.max_capa * amount
+		else
+			error("invalid pwr.max_capa", pwr.max_capa)
 		end
 	end
 	return 0
@@ -229,7 +228,7 @@ function networks.power.get_storage_data(pos, tlib2, outdir)
 	assert(outdir)
 	local netID = networks.determine_netID(pos, tlib2, outdir)
 	if netID then
-		local pwr = Power[netID] or get_power_data(pos, tlib2, outdir)
+		local pwr = Power[netID] or get_power_data(pos, tlib2, outdir, netID)
 		local charging = (pwr.provided > pwr.consumed and 1) or (pwr.provided < pwr.consumed and -1) or 0
 		return {level = pwr.curr_load / pwr.max_capa, charging = charging}
 	end
@@ -315,9 +314,9 @@ function networks.power.get_network_data(pos, tlib2, outdir)
 	for _,outdir in ipairs(networks.get_outdirs(pos, tlib2, outdir)) do
 		local netID = networks.determine_netID(pos, tlib2, outdir)
 		if netID then
-			local pwr = Power[netID] or get_power_data(pos, tlib2, outdir)
+			local pwr = Power[netID] or get_power_data(pos, tlib2, outdir, netID)
 			local consumed, provided, available
-			if pwr.available > 0 then
+			if pwr.available > 0 and pwr.max_perf > 0 then
 				local fac = pwr.max_perf / pwr.available
 				available = pwr.max_perf
 				provided = pwr.provided * fac

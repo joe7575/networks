@@ -49,7 +49,8 @@ end
 -- }
 function networks.liquid.register_nodes(names, tlib2, node_type, valid_sides, liquid_callbacks)
 	if node_type == "pump" then
-		assert(#valid_sides == 1 or #valid_sides == 2)
+		assert(not valid_sides or type(valid_sides) == "table")
+		valid_sides = valid_sides or {"B", "R", "F", "L", "D", "U"}
 	elseif node_type == "tank" or node_type == "junc" then
 		assert(not valid_sides or type(valid_sides) == "table")
 		valid_sides = valid_sides or {"B", "R", "F", "L", "D", "U"}
