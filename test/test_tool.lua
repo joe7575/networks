@@ -52,9 +52,10 @@ local function print_sides(pos, api, netw_type)
 	print("# " .. api .. " - " .. netw_type .. " dirs: " .. table.concat(t, ", "))
 end
 
-local function print_power_network_data(pos, api, netw_type)
+local function print_power_network_data(pos, api, netw, netw_type)
 	local tlib2 = networks.registered_networks[api][netw_type]
-	local data = power.get_network_data(pos, tlib2)
+	local outdir = netw[netw_type].ntype == "junc" and 0 or nil
+	local data = power.get_network_data(pos, tlib2, outdir)
 	if data then
 		local s = string.format("- Netw %u: generated = %u/%u, consumed = %u, storage load = %u/%u",
 			data.netw_num, round(data.provided), 
@@ -70,10 +71,11 @@ local function print_netID(pos, api, netw_type)
 	local tlib2 = networks.registered_networks[api][netw_type]
 	for _,outdir in ipairs(networks.get_outdirs(pos, tlib2)) do
 		local netID = networks.get_netID(pos, outdir)
+		local s = tubelib2.dir_to_string(outdir)
 		if netID then
-			print("- netwNum for '" .. netw_type .. "': " .. networks.netw_num(netID))
+			print("- " .. s .. ": netwNum for '" .. netw_type .. "': " .. networks.netw_num(netID))
 		else
-			print("- Node has no '" .. netw_type .. "' netID!!!")
+			print("- " .. s .. ": Node has no '" .. netw_type .. "' netID!!!")
 		end	
 	end
 end
@@ -117,7 +119,7 @@ local function debug_print(pos)
 		if ndef.networks[netw_type] then
 			print_sides(pos, api, netw_type)
 			if api == "power" then
-				print_power_network_data(pos, api, netw_type)
+				print_power_network_data(pos, api, ndef.networks, netw_type)
 			elseif api == "liquid" then
 				--print_liquid_network_data(pos, api, netw_type)
 			end
@@ -128,52 +130,19 @@ local function debug_print(pos)
 	end
 	
 	print("#####################")
---	local power_netw_types = {}
---	local liqiud_netw_types = {}
---		if k == "pwr" then
---			for _,item in ipairs(v) do
---				power_netw_types[#power_netw_types + 1] =  v.tube_type
---				print(determine_sides(pos, v.tube_type))
---			end
---		elseif k == "liq" then
---			for _,item in ipairs(v) do
---				liqiud_netw_types[#liqiud_netw_types + 1] =  v.tube_type
---				print(determine_sides(pos, v.tube_type))
---			end
---		else
---			print("No known network type")
---			return
---		end
---	end
-	
---	local num = 0
---	local s = ""
---	local outdir = M(pos):get_int("outdir")
---	local netID = networks.determine_netID(pos, Cable, outdir)
---	if netID then
---		num = networks.netw_num(netID)
---		local network = networks.get_network("pwr", netID) or {}
---		s = networks.network_nodes(netID, network)
---	end
---	local ndef = minetest.registered_nodes[node.name]
---	local mem = tubelib2.get_mem(pos)
---	local metadata = M(pos):to_table()
-	
---	print(" ################## Network " .. num .. " #######################")
---	print("networks = " .. dump(ndef.networks))
---	print("mem = " .. dump(mem))
---	print("metadata = " .. dump(metadata.fields))
---	print(s)
 end
 
 local function action(itemstack, placer, pointed_thing)
 	if pointed_thing.type == "node" then
 		local pos = pointed_thing.under
+		networks.register_observe_pos(pos)
 		if placer:get_player_control().sneak then
 			debug_print(pos)
 		else
 			debug_print(pos)
 		end
+	else
+		networks.register_observe_pos(nil)
 	end
 end
 

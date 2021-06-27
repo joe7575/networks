@@ -17,6 +17,7 @@ local S2P = minetest.string_to_pos
 local P2S = function(pos) if pos then return minetest.pos_to_string(pos) end end
 local M = minetest.get_meta
 local N = tubelib2.get_node_lvm
+local OBS = networks.node_observer
 
 networks.power = {}
 networks.registered_networks.power = {}
@@ -37,6 +38,8 @@ local DEFAULT_DATA = {
 
 local Power = {}  -- {netID = {curr_load, max_capa, consumed, provided, available}}
 
+
+
 -- Determine load, capa and other power network data
 local function get_power_data(pos, tlib2, outdir, netID)
 	assert(outdir)
@@ -49,6 +52,7 @@ local function get_power_data(pos, tlib2, outdir, netID)
 		local ndef = minetest.registered_nodes[N(item.pos).name]
 		local data = ndef.get_generator_data and ndef.get_generator_data(item.pos, tlib2)
 		if data then
+			OBS("get_power_data", item.pos, data)
 			max_capa = max_capa + (data.capa or 0)
 			max_perf = max_perf + (data.perf or 0)
 			curr_load = curr_load + ((data.level or 0) * (data.capa or 0))
@@ -59,6 +63,7 @@ local function get_power_data(pos, tlib2, outdir, netID)
 		local ndef = minetest.registered_nodes[N(item.pos).name]
 		local data = ndef.get_storage_data and ndef.get_storage_data(item.pos, tlib2)
 		if data then
+			OBS("get_power_data", item.pos, data)
 			max_capa = max_capa + (data.capa or 0)
 			curr_load = curr_load + ((data.level or 0) * (data.capa or 0))
 		end
@@ -131,6 +136,7 @@ function networks.power.power_available(pos, tlib2, outdir)
 		local netID = networks.determine_netID(pos, tlib2, outdir)
 		if netID then
 			local pwr = Power[netID] or get_power_data(pos, tlib2, outdir, netID)
+			OBS("power_available", pos, pwr)
 			return pwr.curr_load > 0
 		end
 	end
@@ -143,6 +149,7 @@ function networks.power.consume_power(pos, tlib2, outdir, amount)
 		local netID = networks.determine_netID(pos, tlib2, outdir)
 		if netID then
 			local pwr = Power[netID] or get_power_data(pos, tlib2, outdir, netID)
+			OBS("consume_power", pos, {outdir = outdir, amount = amount}, pwr)
 			if pwr.curr_load >= amount then
 				pwr.curr_load = pwr.curr_load - amount
 				pwr.consumed = pwr.consumed + amount
@@ -181,6 +188,7 @@ function networks.power.provide_power(pos, tlib2, outdir, amount, cp1, cp2)
 	if netID then
 		local pwr = Power[netID] or get_power_data(pos, tlib2, outdir, netID)
 		local x = pwr.curr_load / pwr.max_capa
+		OBS("provide_power", pos, {outdir = outdir, amount = amount}, pwr)
 		
 		pwr.available = pwr.available + amount
 		amount = math.min(amount, pwr.max_capa - pwr.curr_load)
@@ -209,6 +217,7 @@ function networks.power.get_storage_load(pos, tlib2, outdir, amount)
 	local netID = networks.determine_netID(pos, tlib2, outdir)
 	if netID then
 		local pwr = Power[netID] or get_power_data(pos, tlib2, outdir, netID)
+		OBS("get_storage_load", pos, pwr)
 		if pwr.max_capa and pwr.max_capa > 0 then
 			return pwr.curr_load / pwr.max_capa * amount
 		else
@@ -229,6 +238,7 @@ function networks.power.get_storage_data(pos, tlib2, outdir)
 	local netID = networks.determine_netID(pos, tlib2, outdir)
 	if netID then
 		local pwr = Power[netID] or get_power_data(pos, tlib2, outdir, netID)
+		OBS("get_storage_data", pos, pwr)
 		local charging = (pwr.provided > pwr.consumed and 1) or (pwr.provided < pwr.consumed and -1) or 0
 		return {level = pwr.curr_load / pwr.max_capa, charging = charging}
 	end
@@ -238,6 +248,7 @@ end
 function networks.power.start_storage_calc(pos, tlib2, outdir)
 	assert(outdir)
 	local netID = networks.determine_netID(pos, tlib2, outdir)
+	OBS("start_storage_calc", pos)
 	if netID then
 		Power[netID] = nil
 	end
