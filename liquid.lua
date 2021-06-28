@@ -148,7 +148,7 @@ end
 function networks.liquid.untake(pos, tlib2, outdir, name, amount)
 	assert(outdir)
 	assert(name)
-	assert(amount and amount > 0)
+	assert(amount)
 	for _,item in ipairs(get_network_table(pos, tlib2, outdir, "tank")) do
 		local liq = LQD(item.pos)
 		if liq and liq.untake then
