@@ -259,11 +259,11 @@ end
 -------------------------------------------------------------------------------
 -- Transformer
 -------------------------------------------------------------------------------
--- Function tries to transfer the specified amount of charge from network 1 to network 2
+-- Charge transfer in both directions between network 1 and network 2
 -- 'netw1' and 'netw2' are tubelib2 network instances.
 -- Function returns a table with result values for:
 -- {curr_load1, curr_load2, max_capa1, max_capa2, moved}
-function networks.power.transform_charge(pos, netw1, outdir1, netw2, outdir2, amount)
+function networks.power.transfer_duplex(pos, netw1, outdir1, netw2, outdir2, amount)
 	local netID1 = networks.determine_netID(pos, netw1, outdir1)
 	local netID2 = networks.determine_netID(pos, netw2, outdir2)
 	if netID1 and netID2 then
@@ -293,7 +293,43 @@ function networks.power.transform_charge(pos, netw1, outdir1, netw2, outdir2, am
 		else
 			moved = 0
 		end	
-		OBS("start_storage_calc", pos, pwr1, pwr2)
+		OBS("transfer_duplex", pos, pwr1, pwr2)
+		return {
+			curr_load1 = pwr1.curr_load, 
+			curr_load2 = pwr2.curr_load, 
+			max_capa1 = pwr1.max_capa, 
+			max_capa2 = pwr2.max_capa, 
+			moved = moved}
+	end
+end
+
+-- Charge transfer in one direction from network 1 to network 2
+-- 'netw1' and 'netw2' are tubelib2 network instances.
+-- Function returns a table with result values for:
+-- {curr_load1, curr_load2, max_capa1, max_capa2, moved}
+function networks.power.transfer_simplex(pos, netw1, outdir1, netw2, outdir2, amount)
+	local netID1 = networks.determine_netID(pos, netw1, outdir1)
+	local netID2 = networks.determine_netID(pos, netw2, outdir2)
+	if netID1 and netID2 then
+		local pwr1 = Power[netID1] or get_power_data(pos, netw1, outdir1, netID1)
+		local pwr2 = Power[netID2] or get_power_data(pos, netw2, outdir2, netID2)
+		local lvl = pwr1.curr_load / pwr1.max_capa - pwr2.curr_load / pwr2.max_capa
+		local moved
+		
+		pwr2.available = pwr2.available + amount
+		pwr1.available = pwr1.available + amount
+		if lvl > 0 then
+			-- transfer from netw1 to netw2
+			moved = math.min(amount, lvl * math.min(pwr1.max_capa, pwr2.max_capa))
+			moved = math.max(moved, 0)
+			pwr1.curr_load = pwr1.curr_load - moved
+			pwr2.curr_load = pwr2.curr_load + moved
+			pwr1.consumed = (pwr1.consumed or 0) + moved
+			pwr2.provided = (pwr2.provided or 0) + moved
+		else
+			moved = 0
+		end	
+		OBS("transfer_simplex", pos, pwr1, pwr2)
 		return {
 			curr_load1 = pwr1.curr_load, 
 			curr_load2 = pwr2.curr_load, 
