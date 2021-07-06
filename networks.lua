@@ -463,7 +463,6 @@ networks.get_node_connection_dirs = get_node_connection_dirs
 -- 'output' is optional and only needed for nodes with dedicated
 -- pipe sides. Junctions have to provide 0 (= same network on all sides).
 function networks.update_network(pos, outdir, tlib2, node)
-	assert(outdir)
 	store_node_connection_sides(pos, tlib2) -- update node internal data
 	delete_netID(pos, tlib2, outdir) -- delete node netIDs and network
 end

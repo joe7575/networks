@@ -114,3 +114,7 @@ Required: tubelib2
 
 **2021-06-04  V0.07**
 - Add 'control' API
+
+**2021-07-06  V0.08**
+
+- Add 'transfer' functions to the 'power' API

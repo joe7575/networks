@@ -247,7 +247,7 @@ minetest.register_node("networks:generator", {
 		local outdir = M(pos):get_int("outdir")
 		power.start_storage_calc(pos, Cable, outdir)
 	end,
-	get_generator_data = function(pos, tlib2)
+	get_generator_data = function(pos, outdir, tlib2)
 		local mem = tubelib2.get_mem(pos)
 		if mem.running then
 			-- generator storage capa = 2 * performance
@@ -317,7 +317,7 @@ minetest.register_node("networks:storage", {
 		local outdir = M(pos):get_int("outdir")
 		power.start_storage_calc(pos, Cable, outdir)
 	end,
-	get_storage_data = function(pos, tlib2)
+	get_storage_data = function(pos, outdir, tlib2)
 		local mem = tubelib2.get_mem(pos)
 		if mem.running then
 			return {level = (mem.load or 0) / STORAGE_CAPA, capa = STORAGE_CAPA}

@@ -18,6 +18,7 @@ local P2S = function(pos) if pos then return minetest.pos_to_string(pos) end end
 local M = minetest.get_meta
 local N = tubelib2.get_node_lvm
 local OBS = networks.node_observer
+local Flip = tubelib2.Turn180Deg
 
 networks.power = {}
 networks.registered_networks.power = {}
@@ -50,7 +51,7 @@ local function get_power_data(pos, tlib2, outdir, netID)
 	-- Generators
 	for _,item in ipairs(netw.gen or {}) do
 		local ndef = minetest.registered_nodes[N(item.pos).name]
-		local data = ndef.get_generator_data and ndef.get_generator_data(item.pos, tlib2)
+		local data = ndef.get_generator_data and ndef.get_generator_data(item.pos, Flip[item.indir], tlib2)
 		if data then
 			OBS("get_power_data", item.pos, data)
 			max_capa = max_capa + (data.capa or 0)
@@ -61,7 +62,7 @@ local function get_power_data(pos, tlib2, outdir, netID)
 	-- Storage systems
 	for _,item in ipairs(netw.sto or {}) do
 		local ndef = minetest.registered_nodes[N(item.pos).name]
-		local data = ndef.get_storage_data and ndef.get_storage_data(item.pos, tlib2)
+		local data = ndef.get_storage_data and ndef.get_storage_data(item.pos, Flip[item.indir], tlib2)
 		if data then
 			OBS("get_power_data", item.pos, data)
 			max_capa = max_capa + (data.capa or 0)
@@ -107,6 +108,7 @@ function networks.power.register_nodes(names, tlib2, node_type, valid_sides)
 	for _, name in ipairs(names) do
 		local ndef = minetest.registered_nodes[name]
 		local tbl = ndef.networks or {}
+		assert(tbl[tlib2.tube_type] == nil, "more than one call of 'networks.power.register_nodes' for " .. names[1])
 		tbl[tlib2.tube_type] = {ntype = node_type}
 		minetest.override_item(name, {networks = tbl})
 		tlib2:set_valid_sides(name, valid_sides)
@@ -317,7 +319,6 @@ function networks.power.transfer_simplex(pos, netw1, outdir1, netw2, outdir2, am
 		local moved
 		
 		pwr2.available = pwr2.available + amount
-		pwr1.available = pwr1.available + amount
 		if lvl > 0 then
 			-- transfer from netw1 to netw2
 			moved = math.min(amount, lvl * math.min(pwr1.max_capa, pwr2.max_capa))
