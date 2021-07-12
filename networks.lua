@@ -19,7 +19,7 @@ local N = tubelib2.get_node_lvm
 local Networks = {} -- cache for networks: {netw_type = {netID = <network>, ...}, ...}
 local NetIDs = {}   -- cache for netw IDs: {pos_hash = {outdir = netID, ...}, ...}
 
-local MAX_NUM_NODES = 500  -- per network including junctions
+local MAX_NUM_NODES = 1000  -- per network including junctions
 local TTL = 5 * 60  -- 5 minutes
 local Route = {} -- Used to determine the already passed nodes while walking
 local NumNodes = 0  -- Used to determine the number of network nodes
