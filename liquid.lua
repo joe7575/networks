@@ -188,7 +188,7 @@ end
 
 function networks.liquid.srv_put(nvm, name, amount, capa)
 	assert(name)
-	assert(amount and amount > 0)
+	assert(amount and amount >= 0)
 	assert(capa and capa > 0)
 	
 	nvm.liquid = nvm.liquid or {}
@@ -212,7 +212,7 @@ function networks.liquid.srv_put(nvm, name, amount, capa)
 end
 
 function networks.liquid.srv_take(nvm, name, amount)
-	assert(amount and amount > 0)
+	assert(amount and amount >= 0)
 	
 	nvm.liquid = nvm.liquid or {}
 	amount = amount or 0

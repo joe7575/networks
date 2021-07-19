@@ -489,10 +489,16 @@ function networks.determine_netID(pos, tlib2, outdir)
 end
 
 -- Provide network with all node tables
-function networks.get_network_table(pos, tlib2, outdir)
+function networks.get_network_table(pos, tlib2, outdir, force)
 	assert(outdir)
 	local netID = get_netID(pos, outdir)
 	if netID then
 		return get_network(tlib2.tube_type, netID)
+	end
+	if force then -- force the network load
+		local netID = networks.determine_netID(pos, tlib2, outdir)
+		if netID then
+			return get_network(tlib2.tube_type, netID)
+		end
 	end
 end
