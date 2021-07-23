@@ -30,8 +30,11 @@ dofile(MP .. "/power.lua")
 dofile(MP .. "/liquid.lua")
 dofile(MP .. "/control.lua")
 
--- Only for testing/demo purposes
---dofile(MP .. "/test/test_liquid.lua")
---local Cable = dofile(MP .. "/test/test_power.lua")
---assert(loadfile(MP .. "/test/test_control.lua"))(Cable)
---dofile(MP .. "/test/test_tool.lua")
+print("networks_test_enabled", minetest.settings:get_bool("networks_test_enabled"))
+if minetest.settings:get_bool("networks_test_enabled") == true then
+	-- Only for testing/demo purposes
+	dofile(MP .. "/test/test_liquid.lua")
+	local Cable = dofile(MP .. "/test/test_power.lua")
+	assert(loadfile(MP .. "/test/test_control.lua"))(Cable)
+	dofile(MP .. "/test/test_tool.lua")
+end
