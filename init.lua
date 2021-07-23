@@ -13,7 +13,7 @@
 networks = {}
 
 -- Version for compatibility checks, see readme.md/history
-networks.version = 0.08
+networks.version = 0.09
 
 if not minetest.global_exists("tubelib2") or tubelib2.version < 2.1 then
 	minetest.log("error", "[networks] Networks requires tubelib2 version 2.1 or newer!")
@@ -32,6 +32,6 @@ dofile(MP .. "/control.lua")
 
 -- Only for testing/demo purposes
 --dofile(MP .. "/test/test_liquid.lua")
-local Cable = dofile(MP .. "/test/test_power.lua")
-assert(loadfile(MP .. "/test/test_control.lua"))(Cable)
-dofile(MP .. "/test/test_tool.lua")
+--local Cable = dofile(MP .. "/test/test_power.lua")
+--assert(loadfile(MP .. "/test/test_control.lua"))(Cable)
+--dofile(MP .. "/test/test_tool.lua")

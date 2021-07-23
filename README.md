@@ -2,8 +2,6 @@
 
 A library to build and manage networks based on tubelib2 tubes, pipes, or cables.
 
-**This library is heavily under development. API changes and crashes are likely!**
-
 ![networks](https://github.com/joe7575/networks/blob/main/screenshot.png)
 
 
@@ -116,5 +114,7 @@ Required: tubelib2
 - Add 'control' API
 
 **2021-07-06  V0.08**
-
 - Add 'transfer' functions to the 'power' API
+
+**2021-07-23  V0.09**
+- bug fixes and improvements

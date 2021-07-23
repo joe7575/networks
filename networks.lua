@@ -274,7 +274,7 @@ local function collect_network_nodes(pos, tlib2, outdir)
 	netw.ttl = minetest.get_gametime() + TTL
 	netw.num_nodes = NumNodes
 	t = minetest.get_us_time() - t
-	print("collect_network_nodes in " .. t .. " us", NumNodes, P2S(pos), N(pos).name)
+	--print("collect_network_nodes in " .. t .. " us", NumNodes, P2S(pos), N(pos).name)
 	return netw
 end
 
@@ -471,11 +471,9 @@ end
 function networks.determine_netID(pos, tlib2, outdir)
 	assert(outdir)
 	local netID = get_netID(pos, outdir)
-	if netID then
-		if netID > 0 then  -- real netID 
-			get_network(tlib2.tube_type, netID)
-			return netID 
-		end
+	if netID and Networks[tlib2.tube_type] and Networks[tlib2.tube_type][netID] then
+		return netID 
+	elseif netID == 0 then
 		return -- no network available
 	end
 	
@@ -485,20 +483,15 @@ function networks.determine_netID(pos, tlib2, outdir)
 		store_netID(tlib2, netw, netID)
 		return netID
 	end
+	-- mark as "no network"
 	set_netID(pos, outdir, 0)
 end
 
 -- Provide network with all node tables
-function networks.get_network_table(pos, tlib2, outdir, force)
+function networks.get_network_table(pos, tlib2, outdir)
 	assert(outdir)
-	local netID = get_netID(pos, outdir)
-	if netID then
+	local netID = networks.determine_netID(pos, tlib2, outdir)
+	if netID and netID > 0 then
 		return get_network(tlib2.tube_type, netID)
-	end
-	if force then -- force the network load
-		local netID = networks.determine_netID(pos, tlib2, outdir)
-		if netID then
-			return get_network(tlib2.tube_type, netID)
-		end
 	end
 end

@@ -56,6 +56,12 @@ local function print_power_network_data(pos, api, netw, netw_type)
 	local tlib2 = networks.registered_networks[api][netw_type]
 	local outdir = netw[netw_type].ntype == "junc" and 0 or nil
 	local data = power.get_network_data(pos, tlib2, outdir)
+	if netw then
+		print("- Number of network nodes: " .. (netw.num_nodes or 0))
+		print("- Number of generators: " .. #(netw.gen or {}))
+		print("- Number of consumers: " .. #(netw.con or {}))
+		print("- Number of storage systems: " .. #(netw.sto or {}))
+	end	
 	if data then
 		local s = string.format("- Netw %u: generated = %u/%u, consumed = %u, storage load = %u/%u",
 			data.netw_num, round(data.provided), 

@@ -24,11 +24,9 @@ networks.registered_networks.liquid = {}
 
 -- return list of nodes {pos = ..., indir = ...} of given node_type
 local function get_network_table(pos, tlib2, outdir, node_type)
-	if networks.determine_netID(pos, tlib2, outdir) then
-		local netw = networks.get_network_table(pos, tlib2, outdir)
-		if netw then
-			return netw[node_type] or {}
-		end
+	local netw = networks.get_network_table(pos, tlib2, outdir)
+	if netw then
+		return netw[node_type] or {}
 	end
 	return {}
 end
