@@ -21,7 +21,7 @@ required as buffers. Generators "charge" the storage system, consumers
 "discharge" the storage system.
 
 Charging the storage system follows a degressive/adaptive charging curve.
-When the storage system is 50% full, the charging load is continuously reduced.
+When the storage system e.g. is 80% full, the charging load is continuously reduced.
 This ensures that all generators are loaded in a balanced manner.
 
 Cables, junctions, and switches can be hidden under blocks (plastering)
@@ -72,6 +72,10 @@ The file `./test/test_liquid.lua` contains test nodes of each kind of liquid nod
 
 The file `./test/test_control.lua` contains server [S] and client [C] nodes
 to demonstrate simple on/off commands.
+
+All this testing nodes can be enabled via mod settings `networks_test_enabled = true` in `minetest.conf`
+
+
 
 
 ### License
