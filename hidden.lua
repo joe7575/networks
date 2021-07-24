@@ -133,13 +133,6 @@ function networks.register_hidden_message(msg)
 	hidden_message = msg
 end
 
--- Register item names to be used as filling material to hide tubes/cables
-function networks.register_filling_items(names)
-	for _, name in ipairs(names) do
-		tFillingMaterial[name] = true
-	end
-end
-
 local function get_new_can_dig(old_can_dig)
 	return function(pos, player, ...)
 		if networks.hidden_name(pos) then
@@ -156,9 +149,11 @@ local function get_new_can_dig(old_can_dig)
 	end
 end
 
--- Change can_dig for registered filling materials.
-minetest.register_on_mods_loaded(function()
-	for name, _ in pairs(tFillingMaterial) do
+-- Register item names to be used as filling material to hide tubes/cables
+function networks.register_filling_items(names)
+	for _, name in ipairs(names) do
+		tFillingMaterial[name] = true
+		-- Change can_dig for registered filling materials.
 		local ndef = minetest.registered_nodes[name]
 		if ndef then
 			local old_can_dig = ndef.can_dig
@@ -167,5 +162,5 @@ minetest.register_on_mods_loaded(function()
 			})
 		end
 	end
-end)
+end
 
