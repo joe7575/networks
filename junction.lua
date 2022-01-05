@@ -16,13 +16,13 @@ end
 
 -- Typical call:  if hasbit(x, bit(3)) then ...
 local function hasbit(x, p)
-  return x % (p + p) >= p       
+  return x % (p + p) >= p
 end
 
 local function setbit(x, p)
   return hasbit(x, p) and x or x + p
 end
-	
+
 local function get_node_box(val, size, boxes)
 	local fixed = {{-size, -size, -size, size, size, size}}
 	for i = 1,6 do
@@ -107,10 +107,13 @@ function networks.junction_type(pos, network, default_side, param2)
 			if connected(network, pos, dir) then
 				val = setbit(val, bit(dir2))
 			elseif network:is_secondary_node(pos, dir) then
-				val = setbit(val, bit(dir2))
+				local node = network:get_secondary_node(pos, dir)
+				if network:is_valid_dir(node, networks.Flip[dir]) then
+					val = setbit(val, bit(dir2))
+				end
 			end
 		end
 	end
 	return val
-end	
+end
 
