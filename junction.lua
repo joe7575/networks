@@ -85,7 +85,7 @@ function networks.junction_type(pos, network, default_side, param2)
 		val = setbit(val, bit(SideToDir[default_side]))
 	end
 	for dir = 1,6 do
-		local dir2 = SideToDir[tubelib2_dir_to_side(dir, param2)]
+		local dir2 = SideToDir[tubelib2_dir_to_side(dir, param2 or 0)]
 		if network.force_to_use_tubes then
 			if connected(network, pos, dir) then
 				val = setbit(val, bit(dir2))
