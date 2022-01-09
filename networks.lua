@@ -27,6 +27,8 @@ local NumNodes = 0  -- Used to determine the number of network nodes
 local Flip = tubelib2.Turn180Deg
 local get_nodename = networks.get_nodename
 local get_node = networks.get_node
+local tubelib2_get_pos = tubelib2.get_pos
+local tubelib2_side_to_dir = tubelib2.side_to_dir
 
 -------------------------------------------------------------------------------
 -- Debugging
@@ -426,6 +428,17 @@ networks.net_def = net_def
 --         F    |
 --              D
 --
+
+-- Determine the pos relative to the given 'pos', 'param2'
+-- and the path based on 'sides' like "FUL"
+function networks.get_relpos(pos, sides, param2)
+	local pos1 = {x = pos.x, y = pos.y, z = pos.z}
+	for side in sides:gmatch(".") do
+		pos1 = tubelib2_get_pos(pos1, tubelib2_side_to_dir(side, param2))
+	end
+	return pos1
+end
+
 -- networks.side_to_outdir(pos, side)
 networks.side_to_outdir = side_to_outdir
 

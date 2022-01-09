@@ -52,24 +52,22 @@ local function print_sides(pos, api, netw_type)
 	print("# " .. api .. " - " .. netw_type .. " dirs: " .. table.concat(t, ", "))
 end
 
-local function print_power_network_data(pos, api, netw, netw_type)
+local function print_power_network_data(pos, api, netw_type, outdir)
 	local tlib2 = networks.registered_networks[api][netw_type]
-	local outdir = netw[netw_type].ntype == "junc" and 0 or nil
 	local data = power.get_network_data(pos, tlib2, outdir)
+	local netw = networks.get_network_table(pos, tlib2, outdir)
 	if netw then
-		print("- Number of network nodes: " .. (netw.num_nodes or 0))
-		print("- Number of generators: " .. #(netw.gen or {}))
-		print("- Number of consumers: " .. #(netw.con or {}))
-		print("- Number of storage systems: " .. #(netw.sto or {}))
+		print("  - Number of network nodes: " .. (netw.num_nodes or 0))
+		print("  - Number of generators: " .. #(netw.gen or {}))
+		print("  - Number of consumers: " .. #(netw.con or {}))
+		print("  - Number of storage systems: " .. #(netw.sto or {}))
 	end
 	if data then
-		local s = string.format("- Netw %u: generated = %u/%u, consumed = %u, storage load = %u/%u",
+		local s = string.format("  - Netw %u: generated = %u/%u, consumed = %u, storage load = %u/%u",
 			data.netw_num, round(data.provided),
 			data.available, round(data.consumed),
 			round(data.curr_load), round(data.max_capa))
 		print(s)
-	else
-		print("- Node has no '" .. netw_type .. "' network!!!")
 	end
 end
 
@@ -92,6 +90,8 @@ local function print_netID(pos, api, netw_type)
 			print("- " .. s .. ": netwNum for '" .. netw_type .. "': " .. networks.netw_num(netID))
 			if api == "liquid" then
 				print_liquid_network_data(pos, api, netw_type, outdir)
+			elseif api == "power" then
+				print_power_network_data(pos, api, netw_type, outdir)
 			end
 		else
 			print("- " .. s .. ": Node has no '" .. netw_type .. "' netID!!!")
@@ -150,9 +150,6 @@ local function debug_print(pos)
 	for netw_type,api in pairs(NetwTypes) do
 		if ndef.networks[netw_type] then
 			print_sides(pos, api, netw_type)
-			if api == "power" then
-				print_power_network_data(pos, api, ndef.networks, netw_type)
-			end
 			print_netID(pos, api, netw_type)
 			print_secondary_node(pos, api, netw_type)
 			print_valid_sides(node.name, api, netw_type)
